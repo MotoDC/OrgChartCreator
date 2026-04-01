@@ -1,13 +1,18 @@
 <!DOCTYPE html>
 <!--
   OrgChartCreator
-  Version: 2.5
+  Version: 2.7
   Repository: https://github.com/MotoDC/OrgChartCreator
   Live: https://motodc.github.io/OrgChartCreator/
   License: MIT
   Author: David Chad (MotoDC)
 
   Changelog:
+  v2.7 - Fixed context menu bug: click event was firing before menu item handlers,
+         nulling ctxTargetName so Focus always received null; fixed render() using
+         allRoots instead of activeRoots for visible node collection in focus mode
+  v2.6 - Search auto pan/zoom to matched nodes; focus clears search state;
+         focus mode opens one level deep with subtrees collapsed
   v2.5 - Right-click focus mode: focus on any person and their subtree
   v2.4 - Fixed collapse-all to mark all descendants, not just root nodes
   v2.3 - Added "Map your customer's org" heading, description, template download link
@@ -19,7 +24,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>OrgMapper v2.2</title>
+<title>OrgChartCreator</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -437,7 +442,7 @@ html, body { height: 100%; overflow: hidden; font-family: var(--font); backgroun
 
 <!-- ══ Upload Screen ════════════════════════════════════════════════════════ -->
 <div id="upload-screen">
-  <div class="u-wordmark">OrgMapper</div>
+  <div class="u-wordmark">OrgChartCreator</div>
   <div class="upload-card">
     <h1>Map your customer's organization</h1>
     <p>Upload a CSV file containing your customer's org structure to generate an interactive, collapsible org chart. Expand and collapse branches to focus on specific teams, then export to PNG for use in business reviews and presentations.</p>
@@ -481,7 +486,7 @@ html, body { height: 100%; overflow: hidden; font-family: var(--font); backgroun
 <!-- ══ App ════════════════════════════════════════════════════════════════ -->
 <div id="app">
   <div id="topbar">
-    <span class="tb-logo">ORGMAPPER</span>
+    <span class="tb-logo">ORGCHARTCREATOR</span>
     <div class="tb-sep"></div>
     <span class="tb-stat" id="stat-people"><b>—</b> people</span>
     <span class="tb-stat" id="stat-levels"><b>—</b> levels</span>
@@ -726,7 +731,7 @@ function render() {
     if (!collapsed[n.name]) n.children.forEach(c => collectVisible(c, nodes));
     return nodes;
   }
-  const visible = allRoots.flatMap(r => collectVisible(r));
+  const visible = activeRoots.flatMap(r => collectVisible(r));
 
   // Draw edges first
   visible.forEach(node => {
@@ -1136,8 +1141,20 @@ function setFocus(name) {
   document.querySelectorAll('.node').forEach(function(el) {
     el.classList.remove('highlighted', 'dimmed');
   });
-  // Reset collapsed for a clean focused view
+  // Collapse everything except the first level under the focused node
+  // Result: focused person visible, direct reports visible but collapsed, rest hidden
   collapsed = {};
+  if (focusNode && allNodes[focusNode]) {
+    function collapseBelow(node, depth) {
+      if (depth >= 1 && node.children.length) {
+        collapsed[node.name] = true;
+      }
+      node.children.forEach(function(child) {
+        collapseBelow(child, depth + 1);
+      });
+    }
+    collapseBelow(allNodes[focusNode], 0);
+  }
   render();
   setTimeout(fitAll, 60);
 }
@@ -1176,7 +1193,9 @@ function hideCtxMenu() {
   ctxTargetName = null;
 }
 
-document.addEventListener('click', hideCtxMenu);
+document.addEventListener('click', function(e) {
+  if (!ctxMenu.contains(e.target)) hideCtxMenu();
+});
 document.addEventListener('keydown', function(e) { if (e.key === 'Escape') hideCtxMenu(); });
 
 document.getElementById('ctx-focus').addEventListener('click', function() {
