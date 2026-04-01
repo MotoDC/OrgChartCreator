@@ -1,13 +1,14 @@
 <!DOCTYPE html>
 <!--
   OrgChartCreator
-  Version: 3.2
+  Version: 3.3
   Repository: https://github.com/MotoDC/OrgChartCreator
   Live: https://motodc.github.io/OrgChartCreator/
   License: MIT
   Author: David Chad (MotoDC)
 
   Changelog:
+  v3.3 - PNG export now excludes Uncategorized node
   v3.2 - Added privacy notice on upload screen
   v3.1 - Fixed: blank manager = intentional root, not orphan;
          VACANT/UNKNOWN/unresolvable = bad data → Uncategorized
@@ -997,7 +998,7 @@ document.getElementById('export-btn').addEventListener('click', () => {
   setTimeout(() => {
     // Compute bounding box of visible nodes
     function collectVisible(n, arr=[]) { arr.push(n); if(!collapsed[n.name]) n.children.forEach(c=>collectVisible(c,arr)); return arr; }
-    const vis = allRoots.flatMap(r => collectVisible(r));
+    const vis = allRoots.flatMap(r => collectVisible(r)).filter(n => !n._synthetic);
     const PAD = 40;
     const minX = Math.min(...vis.map(n=>n.x)) - PAD;
     const minY = Math.min(...vis.map(n=>n.y)) - PAD;
@@ -1030,6 +1031,7 @@ document.getElementById('export-btn').addEventListener('click', () => {
 
     // Draw each node as a rect + text
     vis.forEach(node => {
+      if (node._synthetic) return; // skip Uncategorized node
       const x=node.x-minX, y=node.y-minY, w=NW, h=node.nh||80;
       const [bg,fg] = avatarColors(node.name);
       ctx.save();
