@@ -524,12 +524,12 @@ html, body { height: 100%; overflow: hidden; font-family: var(--font); backgroun
       <span>
         <span class="col-required">name</span>,
         <span class="col-required">manager</span>,
-        <span class="col-optional">role, location, email, phone</span>
+        <span class="col-optional">role, location, email, phone, relationship</span>
       </span>
       <div class="csv-example">
-        name,role,location,manager,email,phone<br>
-        Jane Smith,CEO,New York,,,<br>
-        John Doe,VP Eng,Toronto,Jane Smith,<a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="88e2e7e0e6c8ebe7e5f8e9e6f1a6ebe7e5">[email&#160;protected]</a>,
+        name,manager,role,location,email,relationship<br>
+        Jane Smith,,CTO,Toronto ON,jane@co.com,green<br>
+        John Doe,Jane Smith,VP Eng,Toronto ON,john@co.com,yellow
       </div>
     </div>
 
