@@ -1,13 +1,19 @@
 <!DOCTYPE html>
 <!--
   OrgChartCreator
-  Version: 2.8
+  Version: 3.1
   Repository: https://github.com/MotoDC/OrgChartCreator
   Live: https://motodc.github.io/OrgChartCreator/
   License: MIT
   Author: David Chad (MotoDC)
 
   Changelog:
+  v3.1 - Fixed: blank manager = intentional root, not orphan;
+         VACANT/UNKNOWN/unresolvable = bad data → Uncategorized
+  v3.0 - fitAll now correctly frames all root nodes when collapsed;
+         Uncategorized node starts collapsed so real tree is dominant
+  v2.9 - Uncategorized node: bad/missing manager data now surfaces as a
+         visible amber-styled root node instead of silent orphans
   v2.8 - buildTree now treats blank/VACANT/UNKNOWN managers as a hidden
          synthetic root, collapsing orphan nodes into a single clean tree
   v2.7 - Fixed context menu bug: click event was firing before menu item handlers,
@@ -423,6 +429,20 @@ html, body { height: 100%; overflow: hidden; font-family: var(--font); backgroun
 .ctx-item.danger { color: var(--red); }
 .ctx-item.danger svg { stroke: var(--red); }
 .ctx-divider { height: 1px; background: var(--border); margin: 4px 0; }
+
+/* ── Uncategorized / data-quality root node ── */
+.node.uncategorized {
+  border-color: rgba(245,166,35,0.5) !important;
+  background: repeating-linear-gradient(
+    45deg,
+    var(--surface),
+    var(--surface) 4px,
+    rgba(245,166,35,0.04) 4px,
+    rgba(245,166,35,0.04) 8px
+  ) !important;
+}
+.node.uncategorized .node-name { color: var(--amber) !important; }
+.node.uncategorized .node-role { font-style: italic; }
 </style>
 <script>
   // Apply theme immediately before render to avoid flash
@@ -631,59 +651,58 @@ function buildTree(people) {
   // Normalize names for lookup (trim whitespace variations)
   const normalize = n => (n||'').trim().replace(/\s+/g,' ').toLowerCase();
 
-  // Manager values that mean "no known manager" — treated as system root children
-  const VACANT_NAMES = new Set(['vacant', 'unknown', 'n/a', 'tbd', '']);
+  // Manager values that indicate BAD DATA (not intentional roots)
+  // Blank manager = intentional root (e.g. CEO/CTO) — NOT bad data
+  const BAD_MGR_NAMES = new Set(['vacant', 'unknown', 'n/a', 'tbd']);
 
   const byNorm = {};
   const byName = {};
   people.forEach(p => {
     const norm = normalize(p.name);
-    // Skip VACANT/UNKNOWN people rows entirely — they are manager placeholders, not real people
-    if (VACANT_NAMES.has(norm)) return;
+    // Skip rows where the person's own name is a placeholder
+    if (BAD_MGR_NAMES.has(norm)) return;
     const node = { ...p, name: p.name.trim().replace(/\s+/g,' '), children: [], directReports: 0 };
     byNorm[norm] = node;
     byName[node.name] = node;
   });
 
   const roots = [];
-  const orphans = []; // people whose manager is blank, vacant, unknown, or unresolvable
+  const badDataOrphans = []; // people with VACANT/UNKNOWN/unresolvable manager — bad data
 
   Object.values(byNorm).forEach(node => {
     const mgrRaw = (node.manager || '').trim();
     const mgrNorm = normalize(mgrRaw);
     const mgr = byNorm[mgrNorm];
 
-    if (mgrRaw && !VACANT_NAMES.has(mgrNorm) && mgr && mgr !== node) {
-      // Normal case: valid manager found
+    if (!mgrRaw) {
+      // Blank manager = intentional root (CEO, CTO, etc.) — always a real root
+      roots.push(node);
+    } else if (BAD_MGR_NAMES.has(mgrNorm)) {
+      // Explicit placeholder like VACANT/UNKNOWN — bad data
+      badDataOrphans.push(node);
+    } else if (mgr && mgr !== node) {
+      // Normal case: valid manager found in dataset
       mgr.children.push(node);
       mgr.directReports++;
-    } else if (!mgrRaw || VACANT_NAMES.has(mgrNorm)) {
-      // Blank or explicitly vacant/unknown manager
-      orphans.push(node);
     } else {
-      // Manager name given but not found in dataset — treat as root
-      orphans.push(node);
+      // Manager name given but doesn't match anyone in the dataset — bad data
+      badDataOrphans.push(node);
     }
   });
 
-  if (orphans.length === 0) {
-    // No orphans — return roots as-is (shouldn't happen but handle gracefully)
-    roots.push(...Object.values(byNorm).filter(n => !n._hasParent));
-  } else if (orphans.length === 1) {
-    // Single orphan = single clean root, no synthetic node needed
-    roots.push(orphans[0]);
-  } else {
-    // Multiple orphans — create a hidden synthetic root to unify them
+  if (badDataOrphans.length > 0) {
+    // Create a visible "Uncategorized" node only for genuinely bad data
     const syntheticRoot = {
-      name: '__root__',
-      role: '', location: '', email: '', phone: '', notes: '',
+      name: 'Uncategorized',
+      role: 'Missing or unresolved manager — check data',
+      location: '', email: '', phone: '', notes: '',
       manager: '',
-      children: orphans,
-      directReports: orphans.length,
+      children: badDataOrphans,
+      directReports: badDataOrphans.length,
       _synthetic: true,
     };
-    byNorm['__root__'] = syntheticRoot;
-    byName['__root__'] = syntheticRoot;
+    byNorm['uncategorized'] = syntheticRoot;
+    byName['Uncategorized'] = syntheticRoot;
     roots.push(syntheticRoot);
   }
 
@@ -777,7 +796,6 @@ function render() {
 
   // Draw edges first
   visible.forEach(node => {
-    if (node._synthetic) return; // no edges from hidden root
     if (collapsed[node.name]) return;
     node.children.forEach(child => {
       const px = node.x + NW/2, py = node.y + node.nh;
@@ -794,14 +812,15 @@ function render() {
 
   // Draw nodes
   visible.forEach(node => {
-    if (node._synthetic) return; // hidden system root — no card rendered
-    const [bg, fg] = avatarColors(node.name);
+    const [bg, fg] = node._synthetic
+      ? ['#3a2a0a', '#f5a623']   // amber tones for uncategorized node
+      : avatarColors(node.name);
     const hasExtra = node.location || node.email || node.phone || node.directReports > 0;
     const hasKids  = node.children.length > 0;
     const isColl   = collapsed[node.name];
 
     const el = document.createElement('div');
-    el.className = 'node' + (isColl ? ' collapsed-node' : '');
+    el.className = 'node' + (isColl ? ' collapsed-node' : '') + (node._synthetic ? ' uncategorized' : '');
     el.dataset.name = node.name;
     el.style.cssText = `left:${node.x}px;top:${node.y}px;width:${NW}px`;
 
@@ -852,19 +871,18 @@ function applyTransform() {
 }
 
 function fitAll() {
-  const nodes = Object.values(allNodes).filter(n => {
-    // only check visible nodes
-    return n.x !== undefined;
-  });
-  // Use visible nodes
+  // Use visible nodes — always include root nodes even when collapsed
   function collectVisible(n, arr=[]) { arr.push(n); if(!collapsed[n.name]) n.children.forEach(c=>collectVisible(c,arr)); return arr; }
   var fitRoots = getActiveRoots ? getActiveRoots() : allRoots;
   const vis = fitRoots.flatMap(r => collectVisible(r));
   if (!vis.length) return;
-  const minX = Math.min(...vis.map(n=>n.x));
-  const minY = Math.min(...vis.map(n=>n.y));
-  const maxX = Math.max(...vis.map(n=>n.x+NW));
-  const maxY = Math.max(...vis.map(n=>n.y+(n.nh||80)));
+  // Filter to only nodes that have been laid out (have x position)
+  const laid = vis.filter(n => n.x !== undefined);
+  if (!laid.length) return;
+  const minX = Math.min(...laid.map(n=>n.x));
+  const minY = Math.min(...laid.map(n=>n.y));
+  const maxX = Math.max(...laid.map(n=>n.x+NW));
+  const maxY = Math.max(...laid.map(n=>n.y+(n.nh||80)));
   const ww = wrap.clientWidth, wh = wrap.clientHeight;
   const pw = maxX-minX, ph = maxY-minY;
   scale = Math.min((ww-80)/(pw||1), (wh-80)/(ph||1), 1.2);
@@ -1147,6 +1165,10 @@ renderBtn.addEventListener('click', () => {
   allNodes = byName;
   focusNode = null;
   collapsed = {};
+  // Auto-collapse the Uncategorized node on load so it doesn't dominate
+  if (byName['Uncategorized']) {
+    collapsed['Uncategorized'] = true;
+  }
   document.getElementById('upload-screen').classList.add('hidden');
   document.getElementById('focus-banner').classList.remove('visible');
   render();
