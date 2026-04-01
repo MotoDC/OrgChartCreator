@@ -1,13 +1,14 @@
 <!DOCTYPE html>
 <!--
   OrgChartCreator
-  Version: 3.4
+  Version: 3.5
   Repository: https://github.com/MotoDC/OrgChartCreator
   Live: https://motodc.github.io/OrgChartCreator/
   License: MIT
   Author: David Chad (MotoDC)
 
   Changelog:
+  v3.5 - Relationship column: red/yellow/green dot on node cards
   v3.4 - PNG export fully excludes Uncategorized node and its children;
          connections redrawn from data not DOM to avoid stray lines
   v3.3 - PNG export now excludes Uncategorized node (incomplete fix)
@@ -447,6 +448,16 @@ html, body { height: 100%; overflow: hidden; font-family: var(--font); backgroun
 }
 .node.uncategorized .node-name { color: var(--amber) !important; }
 .node.uncategorized .node-role { font-style: italic; }
+
+/* ── Relationship indicator dot ── */
+.rel-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  flex-shrink: 0; margin-left: auto;
+  box-shadow: 0 0 0 2px var(--surface);
+}
+.rel-dot.green  { background: #2ecc8e; }
+.rel-dot.yellow { background: #f5a623; }
+.rel-dot.red    { background: #f76f6f; }
 </style>
 <script>
   // Apply theme immediately before render to avoid flash
@@ -646,12 +657,20 @@ function parseCSV(text) {
   const iMgr   = col('manager','managername','reportsto','directmanager','reportingto','reportsто');
   const iEmail = col('email','emailaddress','mail');
   const iPhone = col('phone','phonenumber','mobile','tel','telephone');
+  const iRel   = col('relationship','rel','status','health');
   if (iName === -1) return null;
   const people = [];
   for (let i = 1; i < lines.length; i++) {
     const c = splitLine(lines[i]);
     const name = (c[iName] || '').replace(/^"|"$/g,'').trim();
     if (!name) continue;
+    // Normalise relationship value
+    let relRaw = iRel !== -1 ? (c[iRel] || '').trim().toLowerCase() : '';
+    let rel = null;
+    if (['green','g'].includes(relRaw))        rel = 'green';
+    else if (['yellow','y','amber'].includes(relRaw)) rel = 'yellow';
+    else if (['red','r'].includes(relRaw))     rel = 'red';
+
     people.push({
       name,
       role:     iRole  !== -1 ? (c[iRole]  || '').trim() : '',
@@ -659,6 +678,7 @@ function parseCSV(text) {
       manager:  iMgr   !== -1 ? (c[iMgr]   || '').trim() : '',
       email:    iEmail !== -1 ? (c[iEmail] || '').trim() : '',
       phone:    iPhone !== -1 ? (c[iPhone] || '').trim() : '',
+      rel,
     });
   }
   return people.length ? people : null;
@@ -858,6 +878,7 @@ function render() {
           <div class="node-name" title="${esc(node.name)}">${esc(node.name)}</div>
           <div class="node-role" title="${esc(node.role)}">${esc(node.role) || '&nbsp;'}</div>
         </div>
+        ${node.rel ? `<div class="rel-dot ${node.rel}" title="Relationship: ${node.rel}"></div>` : ''}
       </div>
       ${hasExtra ? '<div class="node-divider"></div>' : ''}
       ${node.location ? `<div class="node-field">${ICONS.loc}<span title="${esc(node.location)}">${esc(node.location)}</span></div>` : ''}

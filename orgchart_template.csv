@@ -1,9 +1,9 @@
-name,manager,role,location,email,phone
-Jane Smith,,Chief Technology Officer,Toronto,jane.smith@company.com,416-555-0100
-John Doe,Jane Smith,VP Engineering,Toronto,john.doe@company.com,416-555-0101
-Sarah Lee,Jane Smith,VP Operations,Vancouver,sarah.lee@company.com,604-555-0102
-Mike Chen,John Doe,Director Software Dev,Toronto,mike.chen@company.com,416-555-0103
-Priya Patel,John Doe,Director QA,Toronto,priya.patel@company.com,416-555-0104
-Carlos Ruiz,Sarah Lee,Manager Network Ops,Vancouver,carlos.ruiz@company.com,604-555-0105
-Amy Park,Mike Chen,Senior Developer,Toronto,amy.park@company.com,416-555-0106
-Ben Nguyen,Mike Chen,Senior Developer,Toronto,ben.nguyen@company.com,416-555-0107
+name,manager,role,location,email,phone,relationship
+Jane Smith,,Chief Technology Officer,Toronto ON,jane.smith@company.com,,green
+John Doe,Jane Smith,VP Engineering,Toronto ON,john.doe@company.com,,green
+Sarah Lee,Jane Smith,VP Operations,Vancouver BC,sarah.lee@company.com,,yellow
+Mike Chen,John Doe,Director Software Dev,Toronto ON,mike.chen@company.com,,red
+Priya Patel,John Doe,Director QA,Toronto ON,priya.patel@company.com,,
+Carlos Ruiz,Sarah Lee,Manager Network Ops,Vancouver BC,carlos.ruiz@company.com,,yellow
+Amy Park,Mike Chen,Senior Developer,Toronto ON,amy.park@company.com,,green
+Ben Nguyen,Mike Chen,Senior Developer,Toronto ON,ben.nguyen@company.com,,
