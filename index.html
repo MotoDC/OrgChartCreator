@@ -1,13 +1,15 @@
 <!DOCTYPE html>
 <!--
   OrgChartCreator
-  Version: 2.7
+  Version: 2.8
   Repository: https://github.com/MotoDC/OrgChartCreator
   Live: https://motodc.github.io/OrgChartCreator/
   License: MIT
   Author: David Chad (MotoDC)
 
   Changelog:
+  v2.8 - buildTree now treats blank/VACANT/UNKNOWN managers as a hidden
+         synthetic root, collapsing orphan nodes into a single clean tree
   v2.7 - Fixed context menu bug: click event was firing before menu item handlers,
          nulling ctxTargetName so Focus always received null; fixed render() using
          allRoots instead of activeRoots for visible node collection in focus mode
@@ -628,23 +630,63 @@ function parseCSV(text) {
 function buildTree(people) {
   // Normalize names for lookup (trim whitespace variations)
   const normalize = n => (n||'').trim().replace(/\s+/g,' ').toLowerCase();
+
+  // Manager values that mean "no known manager" — treated as system root children
+  const VACANT_NAMES = new Set(['vacant', 'unknown', 'n/a', 'tbd', '']);
+
   const byNorm = {};
   const byName = {};
   people.forEach(p => {
     const norm = normalize(p.name);
+    // Skip VACANT/UNKNOWN people rows entirely — they are manager placeholders, not real people
+    if (VACANT_NAMES.has(norm)) return;
     const node = { ...p, name: p.name.trim().replace(/\s+/g,' '), children: [], directReports: 0 };
     byNorm[norm] = node;
     byName[node.name] = node;
   });
+
   const roots = [];
-  people.forEach(p => {
-    const node = byNorm[normalize(p.name)];
-    const mgr = byNorm[normalize(p.manager)];
-    if (p.manager && p.manager.trim() && mgr && mgr !== node) {
+  const orphans = []; // people whose manager is blank, vacant, unknown, or unresolvable
+
+  Object.values(byNorm).forEach(node => {
+    const mgrRaw = (node.manager || '').trim();
+    const mgrNorm = normalize(mgrRaw);
+    const mgr = byNorm[mgrNorm];
+
+    if (mgrRaw && !VACANT_NAMES.has(mgrNorm) && mgr && mgr !== node) {
+      // Normal case: valid manager found
       mgr.children.push(node);
       mgr.directReports++;
-    } else roots.push(node);
+    } else if (!mgrRaw || VACANT_NAMES.has(mgrNorm)) {
+      // Blank or explicitly vacant/unknown manager
+      orphans.push(node);
+    } else {
+      // Manager name given but not found in dataset — treat as root
+      orphans.push(node);
+    }
   });
+
+  if (orphans.length === 0) {
+    // No orphans — return roots as-is (shouldn't happen but handle gracefully)
+    roots.push(...Object.values(byNorm).filter(n => !n._hasParent));
+  } else if (orphans.length === 1) {
+    // Single orphan = single clean root, no synthetic node needed
+    roots.push(orphans[0]);
+  } else {
+    // Multiple orphans — create a hidden synthetic root to unify them
+    const syntheticRoot = {
+      name: '__root__',
+      role: '', location: '', email: '', phone: '', notes: '',
+      manager: '',
+      children: orphans,
+      directReports: orphans.length,
+      _synthetic: true,
+    };
+    byNorm['__root__'] = syntheticRoot;
+    byName['__root__'] = syntheticRoot;
+    roots.push(syntheticRoot);
+  }
+
   return { roots, byName: Object.fromEntries(Object.values(byNorm).map(n => [n.name, n])) };
 }
 
@@ -735,6 +777,7 @@ function render() {
 
   // Draw edges first
   visible.forEach(node => {
+    if (node._synthetic) return; // no edges from hidden root
     if (collapsed[node.name]) return;
     node.children.forEach(child => {
       const px = node.x + NW/2, py = node.y + node.nh;
@@ -751,6 +794,7 @@ function render() {
 
   // Draw nodes
   visible.forEach(node => {
+    if (node._synthetic) return; // hidden system root — no card rendered
     const [bg, fg] = avatarColors(node.name);
     const hasExtra = node.location || node.email || node.phone || node.directReports > 0;
     const hasKids  = node.children.length > 0;
