@@ -1,13 +1,18 @@
 <!DOCTYPE html>
 <!--
   OrgChartCreator
-  Version: 3.5
+  Version: 3.7
   Repository: https://github.com/MotoDC/OrgChartCreator
   Live: https://motodc.github.io/OrgChartCreator/
   License: MIT
   Author: David Chad (MotoDC)
 
   Changelog:
+  v3.7 - PNG export now captures current viewport at 2x — exports exactly
+         what you see on screen, respecting zoom/pan/collapse state
+  v3.7 - PNG export now captures current viewport at 2x — exports exactly
+         what you see on screen, respecting zoom/pan/collapse state
+  v3.6 - PNG export: guard against empty canvas (incomplete fix); relationship dot in export
   v3.5 - Relationship column: red/yellow/green dot on node cards
   v3.4 - PNG export fully excludes Uncategorized node and its children;
          connections redrawn from data not DOM to avoid stray lines
@@ -1014,126 +1019,138 @@ document.getElementById('collapse-all-btn').addEventListener('click', () => {
 document.getElementById('export-btn').addEventListener('click', () => {
   showToast('Preparing export…');
 
-  // Temporarily reset transform so we capture full chart
-  const savedScale=scale, savedTx=tx, savedTy=ty;
-  scale=1; tx=0; ty=0; applyTransform();
-
   setTimeout(() => {
-    // Compute bounding box of visible nodes — exclude Uncategorized and its children
+    // Export exactly what's visible in the viewport at 2x resolution
+    const canvasWrap = document.getElementById('canvas-wrap');
+    const W = canvasWrap.clientWidth;
+    const H = canvasWrap.clientHeight;
+    const DPR = 2;
+
+    const canvas2 = document.createElement('canvas');
+    canvas2.width = W * DPR;
+    canvas2.height = H * DPR;
+    const ctx = canvas2.getContext('2d');
+    if (!ctx) { showToast('Export failed'); return; }
+    ctx.scale(DPR, DPR);
+
+    // Background
+    ctx.fillStyle = isLight ? '#f4f5f7' : '#0c0c10';
+    ctx.fillRect(0, 0, W, H);
+
+    // Dot grid
+    ctx.fillStyle = isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.025)';
+    const gridSize = 28;
+    for (let gx = 0; gx < W; gx += gridSize) {
+      for (let gy = 0; gy < H; gy += gridSize) {
+        ctx.beginPath();
+        ctx.arc(gx, gy, 1, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // Apply current pan/zoom transform
+    ctx.save();
+    ctx.translate(tx, ty);
+    ctx.scale(scale, scale);
+
+    // Collect visible nodes excluding synthetic
     function collectVisible(n, arr=[]) {
-      if (n._synthetic) return arr; // skip Uncategorized and don't traverse its children
+      if (n._synthetic) return arr;
       arr.push(n);
-      if(!collapsed[n.name]) n.children.forEach(c=>collectVisible(c,arr));
+      if (!collapsed[n.name]) n.children.forEach(c => collectVisible(c, arr));
       return arr;
     }
-    const vis = allRoots.flatMap(r => collectVisible(r));
-    const PAD = 40;
-    const minX = Math.min(...vis.map(n=>n.x)) - PAD;
-    const minY = Math.min(...vis.map(n=>n.y)) - PAD;
-    const maxX = Math.max(...vis.map(n=>n.x+NW)) + PAD;
-    const maxY = Math.max(...vis.map(n=>n.y+(n.nh||80))) + PAD;
-    const W = maxX-minX, H = maxY-minY;
-
-    // Use html2canvas-style approach: build an SVG snapshot
-    // We'll use the foreignObject technique for HTML nodes
-    const DPR = 2;
-    const canvas2 = document.createElement('canvas');
-    canvas2.width = W*DPR; canvas2.height = H*DPR;
-    const ctx = canvas2.getContext('2d');
-    ctx.scale(DPR,DPR);
-    ctx.fillStyle = isLight ? '#f4f5f7' : '#0c0c10';
-    ctx.fillRect(0,0,W,H);
-
-    // Draw connections — redraw from vis data to exclude Uncategorized paths
+    const vis = getActiveRoots().flatMap(r => collectVisible(r)).filter(n => n.x !== undefined);
     const visNames = new Set(vis.map(n => n.name));
+
+    // Draw connections
     vis.forEach(node => {
       if (collapsed[node.name]) return;
       node.children.forEach(child => {
-        if (!visNames.has(child.name)) return; // skip connections to excluded nodes
+        if (!visNames.has(child.name)) return;
         const px = node.x + NW/2, py = node.y + node.nh;
         const cx = child.x + NW/2, cy = child.y;
         const my = py + (cy - py) * 0.48;
-        ctx.save();
-        ctx.translate(-minX, -minY);
         ctx.beginPath();
         ctx.moveTo(px, py);
         ctx.bezierCurveTo(px, my, cx, my, cx, cy);
-        ctx.strokeStyle = isLight ? 'rgba(37,99,235,0.3)' : 'rgba(79,142,247,0.3)';
-        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = isLight ? 'rgba(37,99,235,0.25)' : 'rgba(79,142,247,0.22)';
+        ctx.lineWidth = 1.5 / scale;
         ctx.stroke();
-        ctx.restore();
       });
     });
 
-    // Draw each node as a rect + text
+    // Draw nodes
     vis.forEach(node => {
-      if (node._synthetic) return; // skip Uncategorized node
-      const x=node.x-minX, y=node.y-minY, w=NW, h=node.nh||80;
-      const [bg,fg] = avatarColors(node.name);
-      ctx.save();
-      // Card background
+      const x = node.x, y = node.y, w = NW, h = node.nh || 80;
+      const [bg, fg] = avatarColors(node.name);
+
       roundRect(ctx, x, y, w, h, 12);
       ctx.fillStyle = isLight ? '#ffffff' : '#141418';
       ctx.fill();
       ctx.strokeStyle = isLight ? 'rgba(0,0,0,0.14)' : 'rgba(255,255,255,0.13)';
-      ctx.lineWidth = 1;
+      ctx.lineWidth = 1 / scale;
       ctx.stroke();
 
-      // Avatar circle
+      // Avatar
       ctx.beginPath();
-      ctx.arc(x+14+17, y+14+17, 17, 0, Math.PI*2);
-      ctx.fillStyle = bg;
-      ctx.fill();
+      ctx.arc(x+31, y+31, 17, 0, Math.PI*2);
+      ctx.fillStyle = bg; ctx.fill();
       ctx.fillStyle = fg;
-      ctx.font = `700 11px monospace`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
+      ctx.font = '700 11px monospace';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillText(initials(node.name), x+31, y+31);
 
       // Name
       ctx.fillStyle = isLight ? '#1a1a2e' : '#e6e6ec';
-      ctx.font = `600 12px Inter, system-ui, sans-serif`;
-      ctx.textAlign = 'left';
-      ctx.textBaseline = 'top';
-      const nameStr = node.name.length > 22 ? node.name.slice(0,21)+'…' : node.name;
-      ctx.fillText(nameStr, x+52, y+14);
+      ctx.font = '600 12px Inter, system-ui, sans-serif';
+      ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+      ctx.fillText(node.name.length > 22 ? node.name.slice(0,21)+'…' : node.name, x+52, y+14);
 
       // Role
       if (node.role) {
         ctx.fillStyle = isLight ? '#6b7280' : '#6a6a7a';
-        ctx.font = `400 10px Inter, system-ui, sans-serif`;
-        const roleStr = node.role.length > 26 ? node.role.slice(0,25)+'…' : node.role;
-        ctx.fillText(roleStr, x+52, y+30);
+        ctx.font = '400 10px Inter, system-ui, sans-serif';
+        ctx.fillText(node.role.length > 26 ? node.role.slice(0,25)+'…' : node.role, x+52, y+30);
       }
 
       // Location
-      let fieldY = y+62;
+      let fieldY = y + 62;
       if (node.location) {
         ctx.fillStyle = isLight ? '#6b7280' : '#6a6a7a';
-        ctx.font = `400 10px Inter, system-ui, sans-serif`;
+        ctx.font = '400 10px Inter, system-ui, sans-serif';
         ctx.fillText('📍 ' + node.location, x+14, fieldY);
         fieldY += 17;
       }
+
+      // Email
       if (node.email) {
         ctx.fillStyle = isLight ? '#2563eb' : '#4f8ef7';
-        ctx.font = `400 10px Inter, system-ui, sans-serif`;
-        const emailStr = node.email.length > 26 ? node.email.slice(0,25)+'…' : node.email;
-        ctx.fillText('✉ ' + emailStr, x+14, fieldY);
-        fieldY += 17;
+        ctx.font = '400 10px Inter, system-ui, sans-serif';
+        ctx.fillText('✉ ' + (node.email.length > 26 ? node.email.slice(0,25)+'…' : node.email), x+14, fieldY);
+      }
+
+      // Relationship dot
+      if (node.rel) {
+        const dotColors = { green: '#2ecc8e', yellow: '#f5a623', red: '#f76f6f' };
+        if (dotColors[node.rel]) {
+          ctx.beginPath();
+          ctx.arc(x + w - 14, y + 14, 5, 0, Math.PI * 2);
+          ctx.fillStyle = dotColors[node.rel];
+          ctx.fill();
+        }
       }
 
       // Collapsed indicator
       if (collapsed[node.name] && node.children.length) {
         ctx.fillStyle = isLight ? '#d97706' : '#f5a623';
-        ctx.font = `500 10px monospace`;
-        ctx.fillText(`▸ ${node.children.length} hidden`, x+w-80, y+h-16);
+        ctx.font = '500 10px monospace';
+        ctx.fillText('\u25b8 ' + node.children.length + ' hidden', x + w - 80, y + h - 16);
       }
-
-      ctx.restore();
     });
 
-    // Done — restore transform and download
-    scale=savedScale; tx=savedTx; ty=savedTy; applyTransform();
+    ctx.restore();
+
     const a = document.createElement('a');
     a.download = 'orgchart.png';
     a.href = canvas2.toDataURL('image/png');
