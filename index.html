@@ -1,14 +1,16 @@
 <!DOCTYPE html>
 <!--
   OrgChartCreator
-  Version: 3.3
+  Version: 3.4
   Repository: https://github.com/MotoDC/OrgChartCreator
   Live: https://motodc.github.io/OrgChartCreator/
   License: MIT
   Author: David Chad (MotoDC)
 
   Changelog:
-  v3.3 - PNG export now excludes Uncategorized node
+  v3.4 - PNG export fully excludes Uncategorized node and its children;
+         connections redrawn from data not DOM to avoid stray lines
+  v3.3 - PNG export now excludes Uncategorized node (incomplete fix)
   v3.2 - Added privacy notice on upload screen
   v3.1 - Fixed: blank manager = intentional root, not orphan;
          VACANT/UNKNOWN/unresolvable = bad data → Uncategorized
@@ -996,9 +998,14 @@ document.getElementById('export-btn').addEventListener('click', () => {
   scale=1; tx=0; ty=0; applyTransform();
 
   setTimeout(() => {
-    // Compute bounding box of visible nodes
-    function collectVisible(n, arr=[]) { arr.push(n); if(!collapsed[n.name]) n.children.forEach(c=>collectVisible(c,arr)); return arr; }
-    const vis = allRoots.flatMap(r => collectVisible(r)).filter(n => !n._synthetic);
+    // Compute bounding box of visible nodes — exclude Uncategorized and its children
+    function collectVisible(n, arr=[]) {
+      if (n._synthetic) return arr; // skip Uncategorized and don't traverse its children
+      arr.push(n);
+      if(!collapsed[n.name]) n.children.forEach(c=>collectVisible(c,arr));
+      return arr;
+    }
+    const vis = allRoots.flatMap(r => collectVisible(r));
     const PAD = 40;
     const minX = Math.min(...vis.map(n=>n.x)) - PAD;
     const minY = Math.min(...vis.map(n=>n.y)) - PAD;
@@ -1016,17 +1023,25 @@ document.getElementById('export-btn').addEventListener('click', () => {
     ctx.fillStyle = isLight ? '#f4f5f7' : '#0c0c10';
     ctx.fillRect(0,0,W,H);
 
-    // Draw connections
-    const paths = document.querySelectorAll('#connections path');
-    paths.forEach(p => {
-      const d = p.getAttribute('d');
-      const p2 = new Path2D(d);
-      ctx.save();
-      ctx.translate(-minX,-minY);
-      ctx.strokeStyle = isLight ? 'rgba(37,99,235,0.3)' : 'rgba(79,142,247,0.3)';
-      ctx.lineWidth = 1.5;
-      ctx.stroke(p2);
-      ctx.restore();
+    // Draw connections — redraw from vis data to exclude Uncategorized paths
+    const visNames = new Set(vis.map(n => n.name));
+    vis.forEach(node => {
+      if (collapsed[node.name]) return;
+      node.children.forEach(child => {
+        if (!visNames.has(child.name)) return; // skip connections to excluded nodes
+        const px = node.x + NW/2, py = node.y + node.nh;
+        const cx = child.x + NW/2, cy = child.y;
+        const my = py + (cy - py) * 0.48;
+        ctx.save();
+        ctx.translate(-minX, -minY);
+        ctx.beginPath();
+        ctx.moveTo(px, py);
+        ctx.bezierCurveTo(px, my, cx, my, cx, cy);
+        ctx.strokeStyle = isLight ? 'rgba(37,99,235,0.3)' : 'rgba(79,142,247,0.3)';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        ctx.restore();
+      });
     });
 
     // Draw each node as a rect + text
