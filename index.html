@@ -1,9 +1,25 @@
 <!DOCTYPE html>
+<!--
+  OrgChartCreator
+  Version: 2.5
+  Repository: https://github.com/MotoDC/OrgChartCreator
+  Live: https://motodc.github.io/OrgChartCreator/
+  License: MIT
+  Author: David Chad (MotoDC)
+
+  Changelog:
+  v2.5 - Right-click focus mode: focus on any person and their subtree
+  v2.4 - Fixed collapse-all to mark all descendants, not just root nodes
+  v2.3 - Added "Map your customer's org" heading, description, template download link
+  v2.2 - Light/dark theme toggle, fixed truncated file, removed Cloudflare artifacts
+  v2.1 - Light mode as default
+  v2.0 - Merged best-of-both: rich node cards + collapse/expand + PNG export
+-->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>OrgMapper v2.4</title>
+<title>OrgMapper v2.2</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -362,6 +378,44 @@ html, body { height: 100%; overflow: hidden; font-family: var(--font); backgroun
 }
 :root.light #theme-toggle .toggle-thumb { transform: translateX(14px); }
 #theme-toggle .toggle-label { font-weight: 500; white-space: nowrap; }
+
+/* ── Focus mode ── */
+#focus-banner {
+  display: none; align-items: center; gap: 10px;
+  padding: 0 16px; height: 32px; flex-shrink: 0;
+  background: rgba(79,142,247,0.1); border-bottom: 1px solid rgba(79,142,247,0.25);
+  font-size: 12px; color: var(--accent); font-family: var(--mono);
+}
+#focus-banner.visible { display: flex; }
+#focus-banner strong { color: var(--text); }
+#focus-reset {
+  margin-left: auto; background: none; border: 1px solid rgba(79,142,247,0.3);
+  border-radius: 6px; padding: 2px 10px; color: var(--accent);
+  cursor: pointer; font-size: 11px; font-family: var(--font);
+  transition: background 0.15s;
+}
+#focus-reset:hover { background: rgba(79,142,247,0.15); }
+
+/* Context menu */
+#ctx-menu {
+  position: fixed; z-index: 2000;
+  background: var(--surface); border: 1px solid var(--border2);
+  border-radius: 10px; padding: 5px;
+  box-shadow: 0 8px 24px var(--shadow-color);
+  display: none; min-width: 180px;
+}
+#ctx-menu.visible { display: block; }
+.ctx-item {
+  padding: 8px 12px; border-radius: 7px; cursor: pointer;
+  font-size: 12.5px; font-family: var(--font); color: var(--text);
+  display: flex; align-items: center; gap: 9px;
+  transition: background 0.12s;
+}
+.ctx-item:hover { background: var(--surface2); }
+.ctx-item svg { width: 13px; height: 13px; stroke: var(--muted); fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+.ctx-item.danger { color: var(--red); }
+.ctx-item.danger svg { stroke: var(--red); }
+.ctx-divider { height: 1px; background: var(--border); margin: 4px 0; }
 </style>
 <script>
   // Apply theme immediately before render to avoid flash
@@ -414,7 +468,7 @@ html, body { height: 100%; overflow: hidden; font-family: var(--font); backgroun
       <div class="csv-example">
         name,role,location,manager,email,phone<br>
         Jane Smith,CEO,New York,,,<br>
-        John Doe,VP Eng,Toronto,Jane Smith,<a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="84eeebeceac4e7ebe9f4e5eafdaae7ebe9">[email&#160;protected]</a>,
+        John Doe,VP Eng,Toronto,Jane Smith,<a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="88e2e7e0e6c8ebe7e5f8e9e6f1a6ebe7e5">[email&#160;protected]</a>,
       </div>
     </div>
 
@@ -457,6 +511,11 @@ html, body { height: 100%; overflow: hidden; font-family: var(--font); backgroun
 
   </div>
 
+  <div id="focus-banner">
+    <svg viewBox="0 0 24 24" width="13" height="13" style="stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
+    Focused on: <strong id="focus-name"></strong>
+    <button id="focus-reset">✕ Reset focus</button>
+  </div>
   <div id="canvas-wrap">
     <svg id="connections"></svg>
     <div id="canvas"></div>
@@ -473,6 +532,23 @@ html, body { height: 100%; overflow: hidden; font-family: var(--font); backgroun
 </div>
 
 <div id="toast"></div>
+
+<!-- Context menu -->
+<div id="ctx-menu">
+  <div class="ctx-item" id="ctx-focus">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
+    Focus on <strong id="ctx-name-label"></strong>
+  </div>
+  <div class="ctx-divider"></div>
+  <div class="ctx-item" id="ctx-expand-node">
+    <svg viewBox="0 0 24 24"><path d="M4 8V4m0 0h4M4 4l5 5m11-5h-4m4 0v4m0-4l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/></svg>
+    Expand branch
+  </div>
+  <div class="ctx-item" id="ctx-collapse-node">
+    <svg viewBox="0 0 24 24"><path d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15h4.5M15 15v4.5m0-4.5l5.25 5.25"/></svg>
+    Collapse branch
+  </div>
+</div>
 
 <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
 'use strict';
@@ -623,11 +699,13 @@ function layoutTree(roots, collapsed) {
 let allNodes = {};
 let allRoots = [];
 let collapsed = {};
+let focusNode = null; // set by focus mode
 let scale = 1, tx = 0, ty = 0;
 
 // ─── Render ───────────────────────────────────────────────────────────────────
 function render() {
-  layoutTree(allRoots, collapsed);
+  var activeRoots = getActiveRoots();
+  layoutTree(activeRoots, collapsed);
 
   const canvas = document.getElementById('canvas');
   const svgEl  = document.getElementById('connections');
@@ -638,7 +716,7 @@ function render() {
   const all = Object.values(allNodes);
   let maxDepth = 0;
   function getDepth(n, d) { maxDepth = Math.max(maxDepth, d); if (!collapsed[n.name]) n.children.forEach(c => getDepth(c, d+1)); }
-  allRoots.forEach(r => getDepth(r, 0));
+  activeRoots.forEach(r => getDepth(r, 0));
   document.getElementById('stat-people').innerHTML = `<b>${all.length}</b> people`;
   document.getElementById('stat-levels').innerHTML = `<b>${maxDepth+1}</b> level${maxDepth ? 's' : ''}`;
 
@@ -731,7 +809,8 @@ function fitAll() {
   });
   // Use visible nodes
   function collectVisible(n, arr=[]) { arr.push(n); if(!collapsed[n.name]) n.children.forEach(c=>collectVisible(c,arr)); return arr; }
-  const vis = allRoots.flatMap(r => collectVisible(r));
+  var fitRoots = getActiveRoots ? getActiveRoots() : allRoots;
+  const vis = fitRoots.flatMap(r => collectVisible(r));
   if (!vis.length) return;
   const minX = Math.min(...vis.map(n=>n.x));
   const minY = Math.min(...vis.map(n=>n.y));
@@ -779,6 +858,8 @@ wrap.addEventListener('touchmove', e=>{ e.preventDefault(); if(e.touches.length=
 // ─── Search ───────────────────────────────────────────────────────────────────
 document.getElementById('search-input').addEventListener('input', e => {
   const q = e.target.value.trim().toLowerCase();
+  const matchedNodes = [];
+
   document.querySelectorAll('.node').forEach(el => {
     const name = el.dataset.name;
     const node = allNodes[name];
@@ -788,7 +869,26 @@ document.getElementById('search-input').addEventListener('input', e => {
       .some(v => (v||'').toLowerCase().includes(q));
     el.classList.toggle('highlighted', match);
     el.classList.toggle('dimmed', !match);
+    if (match) matchedNodes.push(node);
   });
+
+  // Pan and zoom to matched nodes
+  if (q && matchedNodes.length > 0) {
+    const NW = 220;
+    const PAD = 80;
+    const minX = Math.min(...matchedNodes.map(n => n.x)) - PAD;
+    const minY = Math.min(...matchedNodes.map(n => n.y)) - PAD;
+    const maxX = Math.max(...matchedNodes.map(n => n.x + NW)) + PAD;
+    const maxY = Math.max(...matchedNodes.map(n => n.y + (n.nh || 80))) + PAD;
+    const ww = wrap.clientWidth, wh = wrap.clientHeight;
+    const pw = maxX - minX, ph = maxY - minY;
+    // Zoom to fit matches but don't zoom in too far for single nodes
+    const newScale = Math.min((ww - 80) / (pw || 1), (wh - 80) / (ph || 1), 1.4);
+    tx = (ww - pw * newScale) / 2 - minX * newScale;
+    ty = Math.max(24, (wh - ph * newScale) / 2) - minY * newScale;
+    scale = newScale;
+    applyTransform();
+  }
 });
 
 // ─── Expand / Collapse all ────────────────────────────────────────────────────
@@ -797,14 +897,10 @@ document.getElementById('expand-all-btn').addEventListener('click', () => {
   render(); fitAll();
 });
 document.getElementById('collapse-all-btn').addEventListener('click', () => {
-  // Mark every node that has children as collapsed
   function collapseAll(n) {
-    if (n.children.length) {
-      collapsed[n.name] = true;
-      n.children.forEach(collapseAll);
-    }
+    if (n.children.length) { collapsed[n.name] = true; n.children.forEach(collapseAll); }
   }
-  allRoots.forEach(collapseAll);
+  getActiveRoots().forEach(collapseAll);
   render(); fitAll();
 });
 
@@ -1000,8 +1096,10 @@ renderBtn.addEventListener('click', () => {
   const { roots, byName } = buildTree(parsedData);
   allRoots = roots;
   allNodes = byName;
+  focusNode = null;
   collapsed = {};
   document.getElementById('upload-screen').classList.add('hidden');
+  document.getElementById('focus-banner').classList.remove('visible');
   render();
   setTimeout(fitAll, 60);
 });
@@ -1012,11 +1110,104 @@ document.getElementById('reset-btn').addEventListener('click', () => {
   fileStatus.textContent = '';
   errorEl.textContent = '';
   fileInput.value = '';
+  focusNode = null;
   document.getElementById('upload-screen').classList.remove('hidden');
+  document.getElementById('focus-banner').classList.remove('visible');
   document.getElementById('canvas').innerHTML = '';
   document.getElementById('connections').innerHTML = '';
   document.getElementById('stat-people').innerHTML = '<b>—</b> people';
   document.getElementById('stat-levels').innerHTML = '<b>—</b> levels';
+});
+
+// ─── Focus mode ───────────────────────────────────────────────────────────────
+
+function setFocus(name) {
+  focusNode = name || null;
+  var banner = document.getElementById('focus-banner');
+  if (focusNode) {
+    document.getElementById('focus-name').textContent = focusNode;
+    banner.classList.add('visible');
+  } else {
+    banner.classList.remove('visible');
+  }
+  // Clear search state so highlighted/dimmed classes don't bleed into focused render
+  var searchInput = document.getElementById('search-input');
+  if (searchInput) searchInput.value = '';
+  document.querySelectorAll('.node').forEach(function(el) {
+    el.classList.remove('highlighted', 'dimmed');
+  });
+  // Reset collapsed for a clean focused view
+  collapsed = {};
+  render();
+  setTimeout(fitAll, 60);
+}
+
+document.getElementById('focus-reset').addEventListener('click', function() {
+  setFocus(null);
+});
+
+// Override allRoots usage in render to respect focusNode
+// We patch getRoots() to return focused subtree when active
+function getActiveRoots() {
+  if (!focusNode || !allNodes[focusNode]) return allRoots;
+  return [allNodes[focusNode]];
+}
+
+// ─── Context menu ─────────────────────────────────────────────────────────────
+var ctxTargetName = null;
+var ctxMenu = document.getElementById('ctx-menu');
+
+function showCtxMenu(x, y, name) {
+  ctxTargetName = name;
+  var node = allNodes[name];
+  document.getElementById('ctx-name-label').textContent = name;
+  // Show/hide expand/collapse based on whether node has children
+  var hasKids = node && node.children.length > 0;
+  document.getElementById('ctx-expand-node').style.display = hasKids ? 'flex' : 'none';
+  document.getElementById('ctx-collapse-node').style.display = hasKids ? 'flex' : 'none';
+  // Position menu, keep on screen
+  ctxMenu.style.left = Math.min(x, window.innerWidth - 200) + 'px';
+  ctxMenu.style.top = Math.min(y, window.innerHeight - 150) + 'px';
+  ctxMenu.classList.add('visible');
+}
+
+function hideCtxMenu() {
+  ctxMenu.classList.remove('visible');
+  ctxTargetName = null;
+}
+
+document.addEventListener('click', hideCtxMenu);
+document.addEventListener('keydown', function(e) { if (e.key === 'Escape') hideCtxMenu(); });
+
+document.getElementById('ctx-focus').addEventListener('click', function() {
+  if (ctxTargetName) setFocus(ctxTargetName);
+  hideCtxMenu();
+});
+
+document.getElementById('ctx-expand-node').addEventListener('click', function() {
+  if (ctxTargetName) {
+    // Expand just this node (remove from collapsed)
+    collapsed[ctxTargetName] = false;
+    render();
+  }
+  hideCtxMenu();
+});
+
+document.getElementById('ctx-collapse-node').addEventListener('click', function() {
+  if (ctxTargetName) {
+    collapsed[ctxTargetName] = true;
+    render();
+  }
+  hideCtxMenu();
+});
+
+// Attach right-click to nodes (delegated from canvas)
+document.getElementById('canvas').addEventListener('contextmenu', function(e) {
+  var nodeEl = e.target.closest('.node');
+  if (nodeEl) {
+    e.preventDefault();
+    showCtxMenu(e.clientX, e.clientY, nodeEl.dataset.name);
+  }
 });
 </script>
 
@@ -1039,4 +1230,17 @@ document.getElementById('reset-btn').addEventListener('click', () => {
       if (typeof isLight !== 'undefined') isLight = isLightMode;
     }
 
-    var btn = docum
+    var btn = document.getElementById('theme-toggle');
+    if (btn) {
+      btn.addEventListener('click', function() {
+        isLightMode = !isLightMode;
+        applyTheme();
+      });
+    }
+
+    applyTheme();
+  })();
+</script>
+
+</body>
+</html>
