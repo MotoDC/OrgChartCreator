@@ -154,6 +154,31 @@ Some ideas for improvements:
 
 ---
 
+## Changelog
+
+| Version | Changes |
+|---|---|
+| **v3.7** | PNG export now captures current viewport at 2x — exports exactly what you see on screen, respecting zoom/pan/collapse state |
+| **v3.6** | PNG export: guard against empty canvas (incomplete fix); relationship dot included in export |
+| **v3.5** | Relationship column: red/yellow/green dot on node cards |
+| **v3.4** | PNG export fully excludes Uncategorized node and its children; connections redrawn from data not DOM to avoid stray lines |
+| **v3.3** | PNG export now excludes Uncategorized node (incomplete fix) |
+| **v3.2** | Added privacy notice on upload screen |
+| **v3.1** | Fixed: blank manager = intentional root, not orphan; VACANT/UNKNOWN/unresolvable = bad data → Uncategorized |
+| **v3.0** | fitAll now correctly frames all root nodes when collapsed; Uncategorized node starts collapsed so real tree is dominant |
+| **v2.9** | Uncategorized node: bad/missing manager data now surfaces as a visible amber-styled root node instead of silent orphans |
+| **v2.8** | buildTree now treats blank/VACANT/UNKNOWN managers as a hidden synthetic root, collapsing orphan nodes into a single clean tree |
+| **v2.7** | Fixed context menu bug: click event firing before menu item handlers nulled ctxTargetName so Focus always received null; fixed render() using allRoots instead of activeRoots for visible node collection in focus mode |
+| **v2.6** | Search auto pan/zoom to matched nodes; focus clears search state; focus mode opens one level deep with subtrees collapsed |
+| **v2.5** | Right-click focus mode: focus on any person and their subtree |
+| **v2.4** | Fixed collapse-all to mark all descendants, not just root nodes |
+| **v2.3** | Added "Map your customer's org" heading, description, template download link |
+| **v2.2** | Light/dark theme toggle, fixed truncated file, removed Cloudflare artifacts |
+| **v2.1** | Light mode as default |
+| **v2.0** | Merged best-of-both: rich node cards + collapse/expand + PNG export |
+
+---
+
 ## License
 
 MIT — see [LICENSE](LICENSE) for details.
