@@ -6,6 +6,28 @@
 
 ---
 
+## New in v5.0 — Edit directly in the chart
+
+You can now fix and update org data without ever touching the CSV manually.
+
+**Hover any node** to reveal two action buttons in the top-right corner of the card:
+
+| Button | What it does |
+|---|---|
+| ✏️ Pencil | Opens the edit modal for that person |
+| ⊕ Crosshair | Focuses the chart on that person's subtree |
+
+**The edit modal lets you update:**
+- Name, role, location, email, phone
+- Relationship health (🟢 🟡 🔴)
+- Who they report to — type a name and autocomplete will suggest matches
+
+The editor validates your changes before saving — it will catch circular reporting chains, self-assignment, and duplicate names.
+
+> **Important — changes are in-browser only.** Edits do not write back to your original CSV file. When you make a change, a red banner appears at the top of the screen. Click **Download updated CSV** in that banner to save a new file with your changes applied. The downloaded file uses your original filename plus a timestamp — for example, `acme_2026-04-07_1430.csv` — so your source file is never overwritten. Re-upload that file next time to start from where you left off.
+
+---
+
 ## What it does
 
 OrgChartCreator turns a simple CSV file into a fully interactive org chart in your browser — no software to install, no account required, and **no data ever leaves your computer**. All processing happens locally in your browser.
@@ -15,13 +37,15 @@ Built for account managers and sales engineers who need to map a customer's orga
 **Features:**
 - Upload or drag-and-drop a CSV file
 - Auto-generates a hierarchical org chart from name + manager relationships
+- **Hover any node** to edit contact details or focus the chart on that person's subtree
+- Edit name, role, location, email, phone, manager, and relationship health inline
 - Collapse and expand individual branches at any level
 - Collapse all / Expand all with a single click
-- **Right-click any node to focus** — re-roots the chart at that person, showing only their subtree one level deep
 - Search by name, role, or location — auto pan and zoom to matched nodes
 - Relationship indicator — colour-coded dot (🟢 🟡 🔴) on each node card
 - Light and dark mode toggle — remembers your preference
 - Export PNG — captures exactly what's on screen at 2x resolution, ready to paste into slides
+- Download updated CSV — exports your edited data with a timestamped filename
 - Zoom (scroll to zoom, anchors to cursor), pan (drag), fit-to-screen
 - Node cards show name, role, location, email (clickable), direct reports count
 - Handles bad data gracefully — unresolvable managers surface as an **Uncategorized** node
@@ -111,7 +135,8 @@ Priya Patel,John Doe,Director QA,Toronto ON,priya.patel@company.com,,
 | Expand a branch | Click **▸ N hidden** on any node |
 | Collapse everything | Click **Collapse all** in the toolbar |
 | Expand everything | Click **Expand all** in the toolbar |
-| Focus on a person | Right-click any node → **Focus on [Name]** |
+| Edit a person | Hover any node → click the **✏️ pencil** button |
+| Focus on a person | Hover any node → click the **⊕ crosshair** button |
 | Reset focus | Click **✕ Reset focus** in the blue banner |
 | Zoom | Scroll wheel — anchors to cursor position |
 | Pan | Click and drag the canvas |
