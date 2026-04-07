@@ -1,14 +1,22 @@
 <!DOCTYPE html>
 <!--
   OrgChartCreator
-  Version: 3.7
+  Version: 5.0
   Repository: https://github.com/MotoDC/OrgChartCreator
   Live: https://motodc.github.io/OrgChartCreator/
   License: MIT
   Author: David Chad (MotoDC)
 
   Changelog:
-  v3.7 - PNG export now captures current viewport at 2x — exports exactly
+  v5.0 - In-chart editing: hover any node to reveal pencil (edit) and crosshair
+         (focus) buttons; edit modal covers name, role, location, email, phone,
+         manager (autocomplete with cycle/self-assignment/duplicate-name validation),
+         and relationship health; right-click context menu replaced by hover tray;
+         internal ID system -- tree structure driven by stable IDs so renaming is
+         safe and cascades automatically to direct reports; red dirty-state banner
+         appears when unsaved edits exist; CSV download uses source filename +
+         timestamp (e.g. acme_2026-04-07_1430.csv)
+  v3.7 - PNG export now captures current viewport at 2x -- exports exactly
          what you see on screen, respecting zoom/pan/collapse state
   v3.6 - PNG export: guard against empty canvas (incomplete fix); relationship dot in export
   v3.5 - Relationship column: red/yellow/green dot on node cards
@@ -17,7 +25,7 @@
   v3.3 - PNG export now excludes Uncategorized node (incomplete fix)
   v3.2 - Added privacy notice on upload screen
   v3.1 - Fixed: blank manager = intentional root, not orphan;
-         VACANT/UNKNOWN/unresolvable = bad data → Uncategorized
+         VACANT/UNKNOWN/unresolvable = bad data -> Uncategorized
   v3.0 - fitAll now correctly frames all root nodes when collapsed;
          Uncategorized node starts collapsed so real tree is dominant
   v2.9 - Uncategorized node: bad/missing manager data now surfaces as a
@@ -103,9 +111,9 @@
 
 html, body { height: 100%; overflow: hidden; font-family: var(--font); background: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased; }
 
-/* ═══════════════════════════════════════════
+/* ===============================================
    UPLOAD SCREEN
-═══════════════════════════════════════════ */
+=============================================== */
 #upload-screen {
   position: fixed; inset: 0; display: flex; flex-direction: column;
   align-items: center; justify-content: center; z-index: 200;
@@ -126,31 +134,21 @@ html, body { height: 100%; overflow: hidden; font-family: var(--font); backgroun
 .u-wordmark::after { transform: scaleX(-1); }
 
 .upload-card {
-  background: var(--surface);
-  border: 1px solid var(--border2);
-  border-radius: 20px;
-  padding: 40px 44px;
+  background: var(--surface); border: 1px solid var(--border2);
+  border-radius: 20px; padding: 40px 44px;
   max-width: 460px; width: calc(100% - 32px);
   box-shadow: 0 32px 64px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.03);
 }
-.upload-card h1 {
-  font-size: 22px; font-weight: 600; letter-spacing: -0.4px;
-  margin-bottom: 8px;
-}
+.upload-card h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.4px; margin-bottom: 8px; }
 .upload-card p { color: var(--muted); font-size: 13.5px; line-height: 1.65; margin-bottom: 24px; }
 
 .drop-zone {
   border: 1.5px dashed var(--border2); border-radius: var(--radius);
   padding: 28px 20px; cursor: pointer; margin-bottom: 16px;
-  transition: border-color 0.2s, background 0.2s; position: relative;
-  text-align: center;
+  transition: border-color 0.2s, background 0.2s; position: relative; text-align: center;
 }
-.drop-zone:hover, .drop-zone.dragover {
-  border-color: var(--accent); background: var(--accent-glow);
-}
-.drop-zone input[type=file] {
-  position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
-}
+.drop-zone:hover, .drop-zone.dragover { border-color: var(--accent); background: var(--accent-glow); }
+.drop-zone input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
 .drop-icon {
   width: 38px; height: 38px; margin: 0 auto 10px;
   background: rgba(79,142,247,0.12); border-radius: 10px;
@@ -166,64 +164,48 @@ html, body { height: 100%; overflow: hidden; font-family: var(--font); backgroun
   border-radius: 10px; padding: 12px 14px;
   font-family: var(--mono); font-size: 11px; color: var(--muted); line-height: 1.9;
 }
-.hint-label {
-  font-size: 9.5px; letter-spacing: 0.16em; color: var(--accent2);
-  display: block; margin-bottom: 5px; font-weight: 500;
-}
+.hint-label { font-size: 9.5px; letter-spacing: 0.16em; color: var(--accent2); display: block; margin-bottom: 5px; font-weight: 500; }
 .col-required { color: var(--green); }
 .col-optional { color: var(--muted); }
-.csv-example {
-  font-size: 10px; color: var(--muted2); margin-top: 7px;
-  border-top: 1px solid var(--border); padding-top: 7px; line-height: 1.9;
-}
+.csv-example { font-size: 10px; color: var(--muted2); margin-top: 7px; border-top: 1px solid var(--border); padding-top: 7px; line-height: 1.9; }
 
 .btn-upload {
   background: var(--accent); color: #fff; border: none;
-  border-radius: 9px; padding: 12px 0; font-size: 14px;
-  font-weight: 500; cursor: pointer; margin-top: 16px; width: 100%;
+  border-radius: 9px; padding: 12px 0; font-size: 14px; font-weight: 500;
+  cursor: pointer; margin-top: 16px; width: 100%;
   font-family: var(--font); transition: opacity 0.15s, transform 0.1s;
 }
 .btn-upload:hover { opacity: 0.88; }
 .btn-upload:active { transform: scale(0.98); }
 .btn-upload:disabled { background: var(--surface2); color: var(--muted); cursor: not-allowed; opacity: 1; }
-
 #file-status { font-size: 11.5px; color: var(--green); margin-top: 9px; min-height: 18px; font-family: var(--mono); }
 #upload-error { font-size: 11.5px; color: var(--red); margin-top: 4px; min-height: 16px; }
 
-/* ═══════════════════════════════════════════
+/* ===============================================
    APP SHELL
-═══════════════════════════════════════════ */
+=============================================== */
 #app { position: fixed; inset: 0; display: flex; flex-direction: column; }
 
-/* ── Topbar ── */
+/* Topbar */
 #topbar {
-  height: 48px; background: var(--surface);
-  border-bottom: 1px solid var(--border);
+  height: 48px; background: var(--surface); border-bottom: 1px solid var(--border);
   display: flex; align-items: center; padding: 0 12px; gap: 6px;
   flex-shrink: 0; z-index: 10; overflow-x: auto; overflow-y: hidden;
 }
 #topbar::-webkit-scrollbar { display: none; }
-.tb-logo {
-  font-family: var(--mono); font-size: 10.5px; font-weight: 500;
-  color: var(--accent); letter-spacing: 0.22em; white-space: nowrap;
-}
+.tb-logo { font-family: var(--mono); font-size: 10.5px; font-weight: 500; color: var(--accent); letter-spacing: 0.22em; white-space: nowrap; }
 .tb-sep { width: 1px; height: 16px; background: var(--border); flex-shrink: 0; }
 .tb-stat { font-size: 11.5px; color: var(--muted); white-space: nowrap; }
 .tb-stat b { color: var(--text); font-weight: 500; }
-.tb-spacer { flex: 1; }
 
 .tb-search {
   background: var(--surface2); border: 1px solid var(--border);
   border-radius: 7px; display: flex; align-items: center;
-  gap: 7px; padding: 0 10px; height: 28px;
-  transition: border-color 0.15s;
+  gap: 7px; padding: 0 10px; height: 28px; transition: border-color 0.15s;
 }
 .tb-search:focus-within { border-color: rgba(79,142,247,0.4); }
 .tb-search svg { width: 11px; height: 11px; stroke: var(--muted); fill: none; stroke-width: 2.2; stroke-linecap: round; flex-shrink: 0; }
-.tb-search input {
-  background: none; border: none; outline: none;
-  font-size: 12.5px; color: var(--text); width: 160px; font-family: var(--font);
-}
+.tb-search input { background: none; border: none; outline: none; font-size: 12.5px; color: var(--text); width: 160px; font-family: var(--font); }
 .tb-search input::placeholder { color: var(--muted2); }
 
 .tb-btn {
@@ -235,9 +217,8 @@ html, body { height: 100%; overflow: hidden; font-family: var(--font); backgroun
 }
 .tb-btn:hover { color: var(--text); background: var(--surface3); border-color: var(--border2); }
 .tb-btn svg { width: 12px; height: 12px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-.tb-btn.active { color: var(--text); border-color: var(--accent); background: var(--accent-glow); }
 
-/* ── Canvas ── */
+/* Canvas */
 #canvas-wrap {
   flex: 1; overflow: hidden; position: relative; cursor: grab;
   background-color: var(--bg);
@@ -250,14 +231,11 @@ html, body { height: 100%; overflow: hidden; font-family: var(--font); backgroun
 #canvas { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
 #connections { position: absolute; top: 0; left: 0; pointer-events: none; overflow: visible; transform-origin: 0 0; }
 
-/* ── Nodes ── */
+/* Nodes */
 .node {
-  position: absolute;
-  width: var(--node-w);
-  background: var(--surface);
-  border: 1px solid var(--border2);
-  border-radius: var(--radius);
-  padding: 13px 14px 12px;
+  position: absolute; width: var(--node-w);
+  background: var(--surface); border: 1px solid var(--border2);
+  border-radius: var(--radius); padding: 13px 14px 12px;
   transition: box-shadow 0.18s, border-color 0.18s, opacity 0.18s;
   user-select: none;
 }
@@ -265,76 +243,65 @@ html, body { height: 100%; overflow: hidden; font-family: var(--font); backgroun
   border-color: rgba(79,142,247,0.5);
   box-shadow: 0 8px 28px var(--shadow-color), 0 0 0 1px rgba(79,142,247,0.12);
 }
-.node.highlighted {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(79,142,247,0.2), 0 8px 28px var(--shadow-color);
-}
+.node.highlighted { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(79,142,247,0.2), 0 8px 28px var(--shadow-color); }
 .node.dimmed { opacity: 0.18; }
 .node.collapsed-node { border-color: rgba(155,114,245,0.4); }
 
+/* Node hover action buttons */
+.node-actions {
+  position: absolute; top: 7px; right: 7px;
+  display: flex; gap: 3px;
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.15s; z-index: 2;
+}
+.node:hover .node-actions { opacity: 1; pointer-events: auto; }
+.action-btn {
+  width: 22px; height: 22px;
+  background: var(--surface2); border: 1px solid var(--border2);
+  border-radius: 5px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--muted); transition: color 0.12s, background 0.12s, border-color 0.12s; padding: 0;
+}
+.action-btn:hover { color: var(--text); background: var(--surface3); border-color: var(--accent); }
+.action-btn svg { width: 11px; height: 11px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
 /* Avatar + header */
-.node-header { display: flex; align-items: center; gap: 10px; }
+.node-header { display: flex; align-items: center; gap: 10px; padding-right: 50px; }
 .node-avatar {
   width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
   font-size: 11px; font-weight: 700; letter-spacing: 0.03em; font-family: var(--mono);
 }
-.node-name {
-  font-size: 12.5px; font-weight: 600; white-space: nowrap;
-  overflow: hidden; text-overflow: ellipsis; color: var(--text);
-  line-height: 1.3;
-}
-.node-role {
-  font-size: 10.5px; color: var(--muted); white-space: nowrap;
-  overflow: hidden; text-overflow: ellipsis; margin-top: 2px; line-height: 1.3;
-}
-
-/* Divider */
+.node-name { font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text); line-height: 1.3; }
+.node-role { font-size: 10.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; line-height: 1.3; }
 .node-divider { height: 1px; background: var(--border); margin: 10px 0 8px; }
 
-/* Fields */
-.node-field {
-  display: flex; align-items: center; gap: 6px; margin-bottom: 5px;
-}
+.node-field { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; }
 .node-field:last-child { margin-bottom: 0; }
 .node-field svg { width: 10px; height: 10px; stroke: var(--muted2); fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
 .node-field span { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .node-field a { font-size: 11px; color: var(--accent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-decoration: none; }
 .node-field a:hover { text-decoration: underline; }
 
-/* Footer row: reports + collapse toggle */
-.node-footer {
-  display: flex; align-items: center; justify-content: space-between;
-  margin-top: 9px; padding-top: 8px; border-top: 1px solid var(--border);
-  min-height: 20px;
-}
+.node-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 9px; padding-top: 8px; border-top: 1px solid var(--border); min-height: 20px; }
 .node-reports { font-size: 10px; color: var(--muted2); font-family: var(--mono); }
 .collapse-btn {
-  font-size: 10px; font-family: var(--mono);
-  color: var(--accent2); cursor: pointer; padding: 2px 7px;
-  border-radius: 5px; border: 1px solid rgba(155,114,245,0.25);
-  background: rgba(155,114,245,0.07);
-  transition: background 0.15s, color 0.15s;
-  white-space: nowrap; line-height: 1.4;
+  font-size: 10px; font-family: var(--mono); color: var(--accent2); cursor: pointer;
+  padding: 2px 7px; border-radius: 5px; border: 1px solid rgba(155,114,245,0.25);
+  background: rgba(155,114,245,0.07); transition: background 0.15s, color 0.15s; white-space: nowrap; line-height: 1.4;
 }
 .collapse-btn:hover { background: rgba(155,114,245,0.18); color: #c4a3ff; }
 .collapse-btn.is-collapsed { color: var(--amber); border-color: rgba(245,166,35,0.3); background: rgba(245,166,35,0.07); }
 .collapse-btn.is-collapsed:hover { background: rgba(245,166,35,0.18); }
 
-/* ── Zoom controls ── */
+/* Zoom controls */
 #zoom-controls {
   position: absolute; bottom: 20px; right: 20px;
   background: var(--surface); border: 1px solid var(--border);
   border-radius: 10px; display: flex; flex-direction: column;
-  overflow: hidden; z-index: 10;
-  box-shadow: 0 4px 20px var(--shadow-color);
+  overflow: hidden; z-index: 10; box-shadow: 0 4px 20px var(--shadow-color);
 }
-.zoom-btn {
-  width: 34px; height: 34px; background: none; border: none; cursor: pointer;
-  color: var(--muted); font-size: 19px; line-height: 1; font-weight: 300;
-  display: flex; align-items: center; justify-content: center;
-  transition: background 0.15s, color 0.15s;
-}
+.zoom-btn { width: 34px; height: 34px; background: none; border: none; cursor: pointer; color: var(--muted); font-size: 19px; line-height: 1; font-weight: 300; display: flex; align-items: center; justify-content: center; transition: background 0.15s, color 0.15s; }
 .zoom-btn:hover { background: var(--surface2); color: var(--text); }
 .zoom-sep { height: 1px; background: var(--border); }
 .zoom-level { font-size: 9.5px; color: var(--muted); text-align: center; padding: 3px 0; font-family: var(--mono); }
@@ -342,11 +309,9 @@ html, body { height: 100%; overflow: hidden; font-family: var(--font); backgroun
 #fit-btn {
   position: absolute; bottom: 20px; right: 68px;
   background: var(--surface); border: 1px solid var(--border);
-  border-radius: 8px; padding: 0 13px; height: 34px;
-  font-size: 12px; color: var(--muted); cursor: pointer;
-  font-family: var(--font); z-index: 10;
-  box-shadow: 0 4px 20px var(--shadow-color);
-  transition: color 0.15s, background 0.15s;
+  border-radius: 8px; padding: 0 13px; height: 34px; font-size: 12px;
+  color: var(--muted); cursor: pointer; font-family: var(--font); z-index: 10;
+  box-shadow: 0 4px 20px var(--shadow-color); transition: color 0.15s, background 0.15s;
 }
 #fit-btn:hover { color: var(--text); background: var(--surface2); }
 
@@ -358,52 +323,41 @@ html, body { height: 100%; overflow: hidden; font-family: var(--font); backgroun
   border-radius: 7px; padding: 5px 12px;
 }
 
-/* Toast */
 #toast {
   position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px);
   background: var(--surface3); border: 1px solid var(--border2);
-  border-radius: 8px; padding: 9px 18px;
-  font-size: 12.5px; color: var(--text); z-index: 999;
-  opacity: 0; transition: opacity 0.2s, transform 0.2s;
-  pointer-events: none;
+  border-radius: 8px; padding: 9px 18px; font-size: 12.5px; color: var(--text);
+  z-index: 999; opacity: 0; transition: opacity 0.2s, transform 0.2s; pointer-events: none;
 }
 #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
-/* ── Floating theme toggle (always visible) ── */
+/* Theme toggle */
 #theme-toggle {
   position: fixed; top: 14px; right: 16px; z-index: 1000;
   display: flex; align-items: center; gap: 7px;
   background: var(--surface); border: 1px solid var(--border2);
   border-radius: 20px; padding: 6px 14px 6px 10px;
-  cursor: pointer; font-family: var(--font); font-size: 12.5px;
-  color: var(--text); box-shadow: 0 2px 12px var(--shadow-color);
-  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
-  user-select: none;
+  cursor: pointer; font-family: var(--font); font-size: 12.5px; color: var(--text);
+  box-shadow: 0 2px 12px var(--shadow-color);
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s; user-select: none;
 }
-#theme-toggle:hover {
-  background: var(--surface2);
-  box-shadow: 0 4px 16px var(--shadow-color);
-}
+#theme-toggle:hover { background: var(--surface2); box-shadow: 0 4px 16px var(--shadow-color); }
 #theme-toggle .toggle-track {
   width: 32px; height: 18px; border-radius: 9px;
   background: var(--surface3); border: 1px solid var(--border2);
-  position: relative; transition: background 0.2s;
-  flex-shrink: 0;
+  position: relative; transition: background 0.2s; flex-shrink: 0;
 }
 :root.light #theme-toggle .toggle-track { background: var(--accent); border-color: var(--accent); }
 #theme-toggle .toggle-thumb {
-  position: absolute; top: 2px; left: 2px;
-  width: 12px; height: 12px; border-radius: 50%;
-  background: white; transition: transform 0.2s;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%;
+  background: white; transition: transform 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.3);
 }
 :root.light #theme-toggle .toggle-thumb { transform: translateX(14px); }
 #theme-toggle .toggle-label { font-weight: 500; white-space: nowrap; }
 
-/* ── Focus mode ── */
+/* Focus banner */
 #focus-banner {
-  display: none; align-items: center; gap: 10px;
-  padding: 0 16px; height: 32px; flex-shrink: 0;
+  display: none; align-items: center; gap: 10px; padding: 0 16px; height: 32px; flex-shrink: 0;
   background: rgba(79,142,247,0.1); border-bottom: 1px solid rgba(79,142,247,0.25);
   font-size: 12px; color: var(--accent); font-family: var(--mono);
 }
@@ -411,59 +365,93 @@ html, body { height: 100%; overflow: hidden; font-family: var(--font); backgroun
 #focus-banner strong { color: var(--text); }
 #focus-reset {
   margin-left: auto; background: none; border: 1px solid rgba(79,142,247,0.3);
-  border-radius: 6px; padding: 2px 10px; color: var(--accent);
-  cursor: pointer; font-size: 11px; font-family: var(--font);
-  transition: background 0.15s;
+  border-radius: 6px; padding: 2px 10px; color: var(--accent); cursor: pointer;
+  font-size: 11px; font-family: var(--font); transition: background 0.15s;
 }
 #focus-reset:hover { background: rgba(79,142,247,0.15); }
 
-/* Context menu */
-#ctx-menu {
-  position: fixed; z-index: 2000;
-  background: var(--surface); border: 1px solid var(--border2);
-  border-radius: 10px; padding: 5px;
-  box-shadow: 0 8px 24px var(--shadow-color);
-  display: none; min-width: 180px;
+/* Dirty state banner */
+#dirty-banner {
+  display: none; align-items: center; gap: 10px; padding: 0 16px; height: 34px; flex-shrink: 0;
+  background: rgba(247,111,111,0.1); border-bottom: 1px solid rgba(247,111,111,0.28);
+  font-size: 12px; color: var(--red); font-family: var(--mono);
 }
-#ctx-menu.visible { display: block; }
-.ctx-item {
-  padding: 8px 12px; border-radius: 7px; cursor: pointer;
-  font-size: 12.5px; font-family: var(--font); color: var(--text);
-  display: flex; align-items: center; gap: 9px;
-  transition: background 0.12s;
+#dirty-banner.visible { display: flex; }
+#dirty-export-btn {
+  margin-left: auto; background: var(--red); color: #fff; border: none;
+  border-radius: 6px; padding: 3px 13px; font-size: 11.5px; font-weight: 500;
+  cursor: pointer; font-family: var(--font); transition: opacity 0.15s;
 }
-.ctx-item:hover { background: var(--surface2); }
-.ctx-item svg { width: 13px; height: 13px; stroke: var(--muted); fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
-.ctx-item.danger { color: var(--red); }
-.ctx-item.danger svg { stroke: var(--red); }
-.ctx-divider { height: 1px; background: var(--border); margin: 4px 0; }
+#dirty-export-btn:hover { opacity: 0.85; }
 
-/* ── Uncategorized / data-quality root node ── */
+/* Uncategorized node */
 .node.uncategorized {
   border-color: rgba(245,166,35,0.5) !important;
-  background: repeating-linear-gradient(
-    45deg,
-    var(--surface),
-    var(--surface) 4px,
-    rgba(245,166,35,0.04) 4px,
-    rgba(245,166,35,0.04) 8px
-  ) !important;
+  background: repeating-linear-gradient(45deg, var(--surface), var(--surface) 4px, rgba(245,166,35,0.04) 4px, rgba(245,166,35,0.04) 8px) !important;
 }
 .node.uncategorized .node-name { color: var(--amber) !important; }
 .node.uncategorized .node-role { font-style: italic; }
 
-/* ── Relationship indicator dot ── */
-.rel-dot {
-  width: 10px; height: 10px; border-radius: 50%;
-  flex-shrink: 0; margin-left: auto;
-  box-shadow: 0 0 0 2px var(--surface);
-}
+/* Relationship dot */
+.rel-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; margin-left: auto; box-shadow: 0 0 0 2px var(--surface); }
 .rel-dot.green  { background: #2ecc8e; }
 .rel-dot.yellow { background: #f5a623; }
 .rel-dot.red    { background: #f76f6f; }
+
+/* ===============================================
+   EDIT MODAL
+=============================================== */
+.modal-overlay {
+  position: fixed; inset: 0; z-index: 3000;
+  background: rgba(0,0,0,0.55); backdrop-filter: blur(4px);
+  display: none; align-items: center; justify-content: center;
+}
+.modal-overlay.visible { display: flex; }
+.modal-card {
+  background: var(--surface); border: 1px solid var(--border2);
+  border-radius: 16px; width: 420px; max-width: calc(100vw - 32px);
+  box-shadow: 0 24px 64px rgba(0,0,0,0.55); overflow: hidden;
+}
+.modal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 18px 20px 16px; border-bottom: 1px solid var(--border);
+}
+.modal-header h3 { font-size: 15px; font-weight: 600; }
+.modal-close {
+  background: none; border: none; color: var(--muted); cursor: pointer;
+  font-size: 16px; padding: 2px 6px; border-radius: 5px; line-height: 1;
+  transition: color 0.12s, background 0.12s;
+}
+.modal-close:hover { color: var(--text); background: var(--surface2); }
+.modal-body { padding: 16px 20px; display: flex; flex-direction: column; gap: 11px; max-height: 60vh; overflow-y: auto; }
+.modal-row { display: grid; grid-template-columns: 1fr 1fr; gap: 11px; }
+.modal-field label { display: block; font-size: 10.5px; color: var(--muted); font-weight: 500; letter-spacing: 0.06em; margin-bottom: 5px; text-transform: uppercase; }
+.modal-field input, .modal-field select {
+  width: 100%; background: var(--surface2); border: 1px solid var(--border2);
+  border-radius: 8px; padding: 8px 11px; font-size: 13px; color: var(--text);
+  font-family: var(--font); outline: none; transition: border-color 0.15s;
+  appearance: none; -webkit-appearance: none;
+}
+.modal-field input:focus, .modal-field select:focus { border-color: var(--accent); }
+.modal-field select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236a6a7a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 10px center; padding-right: 30px;
+}
+.modal-field input::placeholder { color: var(--muted2); }
+.modal-error {
+  margin: 0 20px; padding: 8px 12px; font-size: 12px; color: var(--red);
+  background: rgba(247,111,111,0.08); border: 1px solid rgba(247,111,111,0.2);
+  border-radius: 7px; display: none;
+}
+.modal-error.visible { display: block; }
+.modal-footer { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 20px; border-top: 1px solid var(--border); }
+.modal-btn { border-radius: 8px; padding: 8px 18px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: var(--font); border: 1px solid transparent; transition: opacity 0.15s, background 0.12s; }
+.modal-btn.secondary { background: var(--surface2); border-color: var(--border2); color: var(--muted); }
+.modal-btn.secondary:hover { color: var(--text); background: var(--surface3); }
+.modal-btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+.modal-btn.primary:hover { opacity: 0.88; }
 </style>
 <script>
-  // Apply theme immediately before render to avoid flash
   (function() {
     if (localStorage.getItem('orgmapper-theme') !== 'dark') {
       document.documentElement.classList.add('light');
@@ -473,33 +461,20 @@ html, body { height: 100%; overflow: hidden; font-family: var(--font); backgroun
 </head>
 <body>
 
-<!-- ── Persistent theme toggle ── -->
 <div id="theme-toggle">
   <div class="toggle-track"><div class="toggle-thumb"></div></div>
   <span class="toggle-label" id="theme-label">Light mode</span>
 </div>
 
-
-<!-- ══ Upload Screen ════════════════════════════════════════════════════════ -->
+<!-- Upload Screen -->
 <div id="upload-screen">
   <div class="u-wordmark">OrgChartCreator</div>
   <div class="upload-card">
     <h1>Map your customer's organization</h1>
     <p>Upload a CSV file containing your customer's org structure to generate an interactive, collapsible org chart. Expand and collapse branches to focus on specific teams, then export to PNG for use in business reviews and presentations.</p>
-
-    <div style="
-      display: flex; align-items: center; gap: 10px;
-      background: rgba(46,204,142,0.08);
-      border: 1px solid rgba(46,204,142,0.25);
-      border-radius: 9px; padding: 10px 14px;
-      margin-bottom: 16px;
-    ">
-      <svg viewBox="0 0 24 24" width="16" height="16" style="stroke:#2ecc8e;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0">
-        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-      </svg>
-      <span style="font-size:12.5px; color:#2ecc8e; font-weight:500;">
-        Your data never leaves your computer — all processing happens locally in your browser.
-      </span>
+    <div style="display:flex;align-items:center;gap:10px;background:rgba(46,204,142,0.08);border:1px solid rgba(46,204,142,0.25);border-radius:9px;padding:10px 14px;margin-bottom:16px;">
+      <svg viewBox="0 0 24 24" width="16" height="16" style="stroke:#2ecc8e;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      <span style="font-size:12.5px;color:#2ecc8e;font-weight:500;">Your data never leaves your computer — all processing happens locally in your browser.</span>
     </div>
     <div class="drop-zone" id="drop-zone">
       <input type="file" accept=".csv,.txt" id="file-input">
@@ -509,56 +484,49 @@ html, body { height: 100%; overflow: hidden; font-family: var(--font); backgroun
       <span class="dz-title"><strong>Click to upload</strong> or drag &amp; drop</span>
       <span class="dz-sub">CSV or TXT · all columns optional except name &amp; manager</span>
     </div>
-
-    <div style="text-align:center; margin-bottom: 12px;">
-      <a href="orgchart_template.csv" download
-         style="font-size:12.5px; color:var(--accent); text-decoration:none; display:inline-flex; align-items:center; gap:5px; font-family:var(--font);">
+    <div style="text-align:center;margin-bottom:12px;">
+      <a href="orgchart_template.csv" download style="font-size:12.5px;color:var(--accent);text-decoration:none;display:inline-flex;align-items:center;gap:5px;font-family:var(--font);">
         <svg viewBox="0 0 24 24" width="13" height="13" style="stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><path d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/></svg>
         Download CSV template
       </a>
     </div>
     <div class="csv-hint">
       <span class="hint-label">COLUMN REFERENCE</span>
-      <span>
-        <span class="col-required">name</span>,
-        <span class="col-required">manager</span>,
-        <span class="col-optional">role, location, email, phone, relationship</span>
-      </span>
+      <span><span class="col-required">name</span>, <span class="col-required">manager</span>, <span class="col-optional">role, location, email, phone, relationship</span></span>
       <div class="csv-example">
         name,manager,role,location,email,relationship<br>
         Jane Smith,,CTO,Toronto ON,jane@co.com,green<br>
         John Doe,Jane Smith,VP Eng,Toronto ON,john@co.com,yellow
       </div>
     </div>
-
     <div id="file-status"></div>
     <div id="upload-error"></div>
-    <button class="btn-upload" id="render-btn" disabled>Generate Org Chart →</button>
+    <button class="btn-upload" id="render-btn" disabled>Generate Org Chart &rarr;</button>
   </div>
 </div>
 
-<!-- ══ App ════════════════════════════════════════════════════════════════ -->
+<!-- App -->
 <div id="app">
   <div id="topbar">
     <span class="tb-logo">ORGCHARTCREATOR</span>
     <div class="tb-sep"></div>
-    <span class="tb-stat" id="stat-people"><b>—</b> people</span>
-    <span class="tb-stat" id="stat-levels"><b>—</b> levels</span>
+    <span class="tb-stat" id="stat-people"><b>&#8212;</b> people</span>
+    <span class="tb-stat" id="stat-levels"><b>&#8212;</b> levels</span>
     <div class="tb-sep"></div>
     <div class="tb-search">
       <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-      <input type="text" id="search-input" placeholder="Search name, role, location…">
+      <input type="text" id="search-input" placeholder="Search name, role, location&hellip;">
     </div>
     <div class="tb-sep"></div>
-    <button class="tb-btn" id="expand-all-btn" title="Expand all branches">
+    <button class="tb-btn" id="expand-all-btn">
       <svg viewBox="0 0 24 24"><path d="M4 8V4m0 0h4M4 4l5 5m11-5h-4m4 0v4m0-4l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/></svg>
       Expand all
     </button>
-    <button class="tb-btn" id="collapse-all-btn" title="Collapse all branches">
+    <button class="tb-btn" id="collapse-all-btn">
       <svg viewBox="0 0 24 24"><path d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15h4.5M15 15v4.5m0-4.5l5.25 5.25"/></svg>
       Collapse all
     </button>
-    <button class="tb-btn" id="export-btn" title="Export PNG">
+    <button class="tb-btn" id="export-btn">
       <svg viewBox="0 0 24 24"><path d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/></svg>
       Export PNG
     </button>
@@ -567,14 +535,20 @@ html, body { height: 100%; overflow: hidden; font-family: var(--font); backgroun
       <svg viewBox="0 0 24 24"><path d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"/></svg>
       New CSV
     </button>
-
   </div>
 
   <div id="focus-banner">
     <svg viewBox="0 0 24 24" width="13" height="13" style="stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
     Focused on: <strong id="focus-name"></strong>
-    <button id="focus-reset">✕ Reset focus</button>
+    <button id="focus-reset">&#10005; Reset focus</button>
   </div>
+
+  <div id="dirty-banner">
+    <svg viewBox="0 0 24 24" width="13" height="13" style="stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><path d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/></svg>
+    Unsaved edits &mdash; chart data has been modified.
+    <button id="dirty-export-btn">Download updated CSV</button>
+  </div>
+
   <div id="canvas-wrap">
     <svg id="connections"></svg>
     <div id="canvas"></div>
@@ -584,63 +558,105 @@ html, body { height: 100%; overflow: hidden; font-family: var(--font); backgroun
       <div class="zoom-sep"></div>
       <div class="zoom-level" id="zoom-level">100%</div>
       <div class="zoom-sep"></div>
-      <button class="zoom-btn" id="zoom-out">−</button>
+      <button class="zoom-btn" id="zoom-out">&#8722;</button>
     </div>
-    <div id="canvas-hint">Click any node's toggle to collapse branch · Scroll to zoom · Drag to pan</div>
+    <div id="canvas-hint">Hover any node for edit &amp; focus options &middot; Scroll to zoom &middot; Drag to pan</div>
   </div>
 </div>
 
 <div id="toast"></div>
 
-<!-- Context menu -->
-<div id="ctx-menu">
-  <div class="ctx-item" id="ctx-focus">
-    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
-    Focus on <strong id="ctx-name-label"></strong>
-  </div>
-  <div class="ctx-divider"></div>
-  <div class="ctx-item" id="ctx-expand-node">
-    <svg viewBox="0 0 24 24"><path d="M4 8V4m0 0h4M4 4l5 5m11-5h-4m4 0v4m0-4l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/></svg>
-    Expand branch
-  </div>
-  <div class="ctx-item" id="ctx-collapse-node">
-    <svg viewBox="0 0 24 24"><path d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15h4.5M15 15v4.5m0-4.5l5.25 5.25"/></svg>
-    Collapse branch
+<!-- Edit Modal -->
+<div id="edit-modal" class="modal-overlay">
+  <div class="modal-card">
+    <div class="modal-header">
+      <h3>Edit contact</h3>
+      <button class="modal-close" id="edit-close">&#10005;</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-row">
+        <div class="modal-field">
+          <label>Name</label>
+          <input type="text" id="edit-name" placeholder="Full name" autocomplete="off">
+        </div>
+        <div class="modal-field">
+          <label>Role / Title</label>
+          <input type="text" id="edit-role" placeholder="Job title" autocomplete="off">
+        </div>
+      </div>
+      <div class="modal-row">
+        <div class="modal-field">
+          <label>Location</label>
+          <input type="text" id="edit-location" placeholder="City or office" autocomplete="off">
+        </div>
+        <div class="modal-field">
+          <label>Relationship</label>
+          <select id="edit-rel">
+            <option value="">None</option>
+            <option value="green">&#x1F7E2; Green</option>
+            <option value="yellow">&#x1F7E1; Yellow</option>
+            <option value="red">&#x1F534; Red</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-row">
+        <div class="modal-field">
+          <label>Email</label>
+          <input type="email" id="edit-email" placeholder="email@company.com" autocomplete="off">
+        </div>
+        <div class="modal-field">
+          <label>Phone</label>
+          <input type="text" id="edit-phone" placeholder="+1 555 000 0000" autocomplete="off">
+        </div>
+      </div>
+      <div class="modal-field">
+        <label>Reports to (manager)</label>
+        <input type="text" id="edit-manager" list="manager-options" placeholder="Leave blank to make a root node" autocomplete="off">
+        <datalist id="manager-options"></datalist>
+      </div>
+    </div>
+    <div class="modal-error" id="edit-error"></div>
+    <div class="modal-footer">
+      <button class="modal-btn secondary" id="edit-cancel">Cancel</button>
+      <button class="modal-btn primary" id="edit-save">Save changes</button>
+    </div>
   </div>
 </div>
 
-<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
+<script>
 'use strict';
 
-// ─── SVG icons ────────────────────────────────────────────────────────────────
-const ICONS = {
-  loc:   `<svg viewBox="0 0 24 24"><path d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z"/><path d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z"/></svg>`,
-  email: `<svg viewBox="0 0 24 24"><rect x="2.25" y="4.5" width="19.5" height="15" rx="2.25"/><path d="M2.25 6.75l9.75 6.75 9.75-6.75"/></svg>`,
-  phone: `<svg viewBox="0 0 24 24"><path d="M2.25 6.338c0-1.243.97-2.25 2.17-2.25h.702c.504 0 .948.32 1.108.8l1.25 3.75a1.2 1.2 0 01-.274 1.225l-1.163 1.163a13.502 13.502 0 006.712 6.712l1.163-1.163a1.2 1.2 0 011.225-.274l3.75 1.25c.48.16.8.604.8 1.108v.702c0 1.2-1.007 2.17-2.25 2.17C6.857 21.75 2.25 17.143 2.25 6.338z"/></svg>`,
-};
+// SVG icon constants (static strings -- not user data, XSS-safe)
+var ICON_LOC   = '<svg viewBox="0 0 24 24"><path d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z"/><path d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z"/></svg>';
+var ICON_EMAIL = '<svg viewBox="0 0 24 24"><rect x="2.25" y="4.5" width="19.5" height="15" rx="2.25"/><path d="M2.25 6.75l9.75 6.75 9.75-6.75"/></svg>';
+var ICON_PHONE = '<svg viewBox="0 0 24 24"><path d="M2.25 6.338c0-1.243.97-2.25 2.17-2.25h.702c.504 0 .948.32 1.108.8l1.25 3.75a1.2 1.2 0 01-.274 1.225l-1.163 1.163a13.502 13.502 0 006.712 6.712l1.163-1.163a1.2 1.2 0 011.225-.274l3.75 1.25c.48.16.8.604.8 1.108v.702c0 1.2-1.007 2.17-2.25 2.17C6.857 21.75 2.25 17.143 2.25 6.338z"/></svg>';
+var ICON_PENCIL= '<svg viewBox="0 0 24 24"><path d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125"/></svg>';
+var ICON_FOCUS = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>';
 
-// ─── Avatar palette ───────────────────────────────────────────────────────────
-const PALETTES = [
+// Avatar palette
+var PALETTES = [
   ['#0e2347','#6aaaff'],['#0a2a1e','#2ed4a0'],['#1e1040','#b48bff'],
   ['#3a1020','#ff7aaa'],['#2e1a08','#ffaa5a'],['#071e30','#50c8ff'],
   ['#132408','#8ecf40'],['#2a0e0e','#ff7474'],['#0c1e30','#4fb8e0'],
   ['#201e08','#d4c044'],['#180e38','#c084fc'],['#0a2216','#4ade80'],
 ];
 function avatarColors(name) {
-  let h = 0; for (const c of name) h = (h * 31 + c.charCodeAt(0)) & 0xffff;
+  var h = 0; for (var i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) & 0xffff;
   return PALETTES[h % PALETTES.length];
 }
 function initials(name) {
-  return name.trim().split(/\s+/).filter(Boolean).map(w => w[0]).slice(0,2).join('').toUpperCase();
+  return name.trim().split(/\s+/).filter(Boolean).map(function(w){return w[0];}).slice(0,2).join('').toUpperCase();
 }
+// esc() sanitizes ALL user-supplied strings before insertion into HTML
 function esc(s) {
   return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-// ─── CSV Parser ───────────────────────────────────────────────────────────────
+// CSV Parser
 function splitLine(line) {
-  const res = []; let cur = '', inQ = false;
-  for (const c of line) {
+  var res = [], cur = '', inQ = false;
+  for (var i = 0; i < line.length; i++) {
+    var c = line[i];
     if (c === '"') { inQ = !inQ; }
     else if (c === ',' && !inQ) { res.push(cur.trim()); cur = ''; }
     else cur += c;
@@ -650,200 +666,197 @@ function splitLine(line) {
 }
 
 function parseCSV(text) {
-  const lines = text.trim().split(/\r?\n/).filter(l => l.trim());
+  var lines = text.trim().split(/\r?\n/).filter(function(l){return l.trim();});
   if (lines.length < 2) return null;
-  const headers = splitLine(lines[0]).map(h => h.replace(/^"|"$/g,'').trim().toLowerCase().replace(/[^a-z]/g,''));
-  const col = (...keys) => { for (const k of keys) { const i = headers.indexOf(k); if (i !== -1) return i; } return -1; };
-  const iName  = col('name');
-  const iRole  = col('role','title','jobtitle','position');
-  const iLoc   = col('location','loc','city','office');
-  const iMgr   = col('manager','managername','reportsto','directmanager','reportingto','reportsто');
-  const iEmail = col('email','emailaddress','mail');
-  const iPhone = col('phone','phonenumber','mobile','tel','telephone');
-  const iRel   = col('relationship','rel','status','health');
+  var headers = splitLine(lines[0]).map(function(h){return h.replace(/^"|"$/g,'').trim().toLowerCase().replace(/[^a-z]/g,'');});
+  function col() {
+    for (var i = 0; i < arguments.length; i++) {
+      var idx = headers.indexOf(arguments[i]);
+      if (idx !== -1) return idx;
+    }
+    return -1;
+  }
+  var iName  = col('name');
+  var iRole  = col('role','title','jobtitle','position');
+  var iLoc   = col('location','loc','city','office');
+  var iMgr   = col('manager','managername','reportsto','directmanager','reportingto');
+  var iEmail = col('email','emailaddress','mail');
+  var iPhone = col('phone','phonenumber','mobile','tel','telephone');
+  var iRel   = col('relationship','rel','status','health');
   if (iName === -1) return null;
-  const people = [];
-  for (let i = 1; i < lines.length; i++) {
-    const c = splitLine(lines[i]);
-    const name = (c[iName] || '').replace(/^"|"$/g,'').trim();
+  var people = [];
+  for (var i = 1; i < lines.length; i++) {
+    var c = splitLine(lines[i]);
+    var name = (c[iName] || '').replace(/^"|"$/g,'').trim();
     if (!name) continue;
-    // Normalise relationship value
-    let relRaw = iRel !== -1 ? (c[iRel] || '').trim().toLowerCase() : '';
-    let rel = null;
-    if (['green','g'].includes(relRaw))        rel = 'green';
-    else if (['yellow','y','amber'].includes(relRaw)) rel = 'yellow';
-    else if (['red','r'].includes(relRaw))     rel = 'red';
-
+    var relRaw = iRel !== -1 ? (c[iRel] || '').trim().toLowerCase() : '';
+    var rel = null;
+    if (relRaw === 'green' || relRaw === 'g') rel = 'green';
+    else if (relRaw === 'yellow' || relRaw === 'y' || relRaw === 'amber') rel = 'yellow';
+    else if (relRaw === 'red' || relRaw === 'r') rel = 'red';
     people.push({
-      name,
+      _id:      String(people.length),
+      name:     name,
       role:     iRole  !== -1 ? (c[iRole]  || '').trim() : '',
       location: iLoc   !== -1 ? (c[iLoc]   || '').trim() : '',
       manager:  iMgr   !== -1 ? (c[iMgr]   || '').trim() : '',
       email:    iEmail !== -1 ? (c[iEmail] || '').trim() : '',
       phone:    iPhone !== -1 ? (c[iPhone] || '').trim() : '',
-      rel,
+      rel:      rel,
     });
   }
   return people.length ? people : null;
 }
 
-// ─── Tree builder ─────────────────────────────────────────────────────────────
+// Tree builder -- uses p.manager (name string) always kept in sync
 function buildTree(people) {
-  // Normalize names for lookup (trim whitespace variations)
-  const normalize = n => (n||'').trim().replace(/\s+/g,' ').toLowerCase();
+  function normalize(n) { return (n||'').trim().replace(/\s+/g,' ').toLowerCase(); }
+  var BAD = {'vacant':1,'unknown':1,'n/a':1,'tbd':1};
 
-  // Manager values that indicate BAD DATA (not intentional roots)
-  // Blank manager = intentional root (e.g. CEO/CTO) — NOT bad data
-  const BAD_MGR_NAMES = new Set(['vacant', 'unknown', 'n/a', 'tbd']);
+  var byId = {}, byName = {}, nameToId = {};
 
-  const byNorm = {};
-  const byName = {};
-  people.forEach(p => {
-    const norm = normalize(p.name);
-    // Skip rows where the person's own name is a placeholder
-    if (BAD_MGR_NAMES.has(norm)) return;
-    const node = { ...p, name: p.name.trim().replace(/\s+/g,' '), children: [], directReports: 0 };
-    byNorm[norm] = node;
+  people.forEach(function(p) {
+    var norm = normalize(p.name);
+    if (BAD[norm]) return;
+    var node = {
+      _id: p._id, name: p.name.trim().replace(/\s+/g,' '),
+      role: p.role, location: p.location, manager: p.manager,
+      email: p.email, phone: p.phone, rel: p.rel,
+      children: [], directReports: 0, managerId: null,
+    };
+    byId[node._id] = node;
     byName[node.name] = node;
+    nameToId[norm] = node._id;
   });
 
-  const roots = [];
-  const badDataOrphans = []; // people with VACANT/UNKNOWN/unresolvable manager — bad data
+  var roots = [], orphans = [];
 
-  Object.values(byNorm).forEach(node => {
-    const mgrRaw = (node.manager || '').trim();
-    const mgrNorm = normalize(mgrRaw);
-    const mgr = byNorm[mgrNorm];
-
+  Object.keys(byId).forEach(function(id) {
+    var node = byId[id];
+    var mgrRaw = (node.manager || '').trim();
+    var mgrNorm = normalize(mgrRaw);
     if (!mgrRaw) {
-      // Blank manager = intentional root (CEO, CTO, etc.) — always a real root
       roots.push(node);
-    } else if (BAD_MGR_NAMES.has(mgrNorm)) {
-      // Explicit placeholder like VACANT/UNKNOWN — bad data
-      badDataOrphans.push(node);
-    } else if (mgr && mgr !== node) {
-      // Normal case: valid manager found in dataset
-      mgr.children.push(node);
-      mgr.directReports++;
+    } else if (BAD[mgrNorm]) {
+      orphans.push(node);
     } else {
-      // Manager name given but doesn't match anyone in the dataset — bad data
-      badDataOrphans.push(node);
+      var mgrId = nameToId[mgrNorm];
+      var mgr = mgrId !== undefined ? byId[mgrId] : null;
+      if (mgr && mgr._id !== node._id) {
+        node.managerId = mgrId;
+        mgr.children.push(node);
+        mgr.directReports++;
+      } else {
+        orphans.push(node);
+      }
     }
   });
 
-  if (badDataOrphans.length > 0) {
-    // Create a visible "Uncategorized" node only for genuinely bad data
-    const syntheticRoot = {
-      name: 'Uncategorized',
-      role: 'Missing or unresolved manager — check data',
-      location: '', email: '', phone: '', notes: '',
-      manager: '',
-      children: badDataOrphans,
-      directReports: badDataOrphans.length,
-      _synthetic: true,
+  if (orphans.length > 0) {
+    var synthetic = {
+      _id: '__uncategorized__', name: 'Uncategorized',
+      role: 'Missing or unresolved manager -- check data',
+      location: '', email: '', phone: '', manager: '', rel: null,
+      children: orphans, directReports: orphans.length,
+      managerId: null, _synthetic: true,
     };
-    byNorm['uncategorized'] = syntheticRoot;
-    byName['Uncategorized'] = syntheticRoot;
-    roots.push(syntheticRoot);
+    byId['__uncategorized__'] = synthetic;
+    byName['Uncategorized'] = synthetic;
+    roots.push(synthetic);
   }
 
-  return { roots, byName: Object.fromEntries(Object.values(byNorm).map(n => [n.name, n])) };
+  return { roots: roots, byId: byId, byName: byName };
 }
 
-// ─── Layout ───────────────────────────────────────────────────────────────────
-const NW = 220, HGAP = 30, VGAP = 64;
+// Layout
+var NW = 220, HGAP = 30, VGAP = 64;
 
 function getNodeHeight(node) {
-  let h = 60; // header
-  const hasExtra = node.location || node.email || node.phone || node.directReports > 0;
+  var h = 60;
+  var hasExtra = node.location || node.email || node.phone || node.directReports > 0;
   if (hasExtra) {
-    h += 17; // divider
+    h += 17;
     if (node.location) h += 18;
     if (node.email)    h += 18;
     if (node.phone)    h += 18;
   }
-  // footer always shown if has children
   if (node.children.length > 0) h += 28;
   return h + 10;
 }
 
 function layoutTree(roots, collapsed) {
   function measure(n) {
-    if (!n.children.length || collapsed[n.name]) { n.sw = NW; return; }
+    if (!n.children.length || collapsed[n._id]) { n.sw = NW; return; }
     n.children.forEach(measure);
-    n.sw = n.children.reduce((s,c) => s + c.sw, 0) + HGAP * (n.children.length - 1);
+    n.sw = n.children.reduce(function(s,c){return s+c.sw;},0) + HGAP*(n.children.length-1);
   }
-
-  // Row heights
-  const rowMaxH = {};
+  var rowMaxH = {};
   function scanDepths(n, d) {
     rowMaxH[d] = Math.max(rowMaxH[d]||0, getNodeHeight(n));
-    if (!collapsed[n.name]) n.children.forEach(c => scanDepths(c, d+1));
+    if (!collapsed[n._id]) n.children.forEach(function(c){scanDepths(c,d+1);});
   }
-  roots.forEach(r => scanDepths(r, 0));
-
-  const rowY = {};
-  let y = 0;
-  Object.keys(rowMaxH).map(Number).sort((a,b)=>a-b).forEach(d => {
-    rowY[d] = y; y += rowMaxH[d] + VGAP;
+  roots.forEach(function(r){scanDepths(r,0);});
+  var rowY = {}, y = 0;
+  Object.keys(rowMaxH).map(Number).sort(function(a,b){return a-b;}).forEach(function(d){
+    rowY[d]=y; y+=rowMaxH[d]+VGAP;
   });
-
   function place(n, depth, left) {
-    n.y = rowY[depth] || 0;
-    n.nh = getNodeHeight(n);
-    n.depth = depth;
-    if (!n.children.length || collapsed[n.name]) { n.x = left; return; }
-    let cx = left;
-    n.children.forEach(c => { place(c, depth+1, cx); cx += c.sw + HGAP; });
-    n.x = (n.children[0].x + n.children[n.children.length-1].x) / 2;
+    n.y = rowY[depth]||0; n.nh = getNodeHeight(n); n.depth = depth;
+    if (!n.children.length || collapsed[n._id]) { n.x=left; return; }
+    var cx=left;
+    n.children.forEach(function(c){place(c,depth+1,cx);cx+=c.sw+HGAP;});
+    n.x = (n.children[0].x + n.children[n.children.length-1].x)/2;
   }
-
-  let cursor = 0;
-  roots.forEach(r => { measure(r); place(r, 0, cursor); cursor += r.sw + HGAP * 3; });
+  var cursor=0;
+  roots.forEach(function(r){measure(r);place(r,0,cursor);cursor+=r.sw+HGAP*3;});
 }
 
-// ─── App State ────────────────────────────────────────────────────────────────
-let allNodes = {};
-let allRoots = [];
-let collapsed = {};
-let focusNode = null; // set by focus mode
-let scale = 1, tx = 0, ty = 0;
+// App state
+var people = [], allNodes = {}, allNodesByName = {}, allRoots = [];
+var collapsed = {}, focusNode = null;
+var scale = 1, tx = 0, ty = 0;
+var isDirty = false, sourceFileName = 'orgchart';
 
-// ─── Render ───────────────────────────────────────────────────────────────────
+function updateDirtyBanner() {
+  document.getElementById('dirty-banner').classList.toggle('visible', isDirty);
+}
+
+// Render
 function render() {
   var activeRoots = getActiveRoots();
   layoutTree(activeRoots, collapsed);
 
-  const canvas = document.getElementById('canvas');
-  const svgEl  = document.getElementById('connections');
-  canvas.innerHTML = '';
-  svgEl.innerHTML  = '';
+  var canvas = document.getElementById('canvas');
+  var svgEl  = document.getElementById('connections');
+  // Safe: clearing existing DOM, not inserting user content
+  canvas.textContent = '';
+  svgEl.textContent  = '';
 
-  // Stats
-  const all = Object.values(allNodes);
-  let maxDepth = 0;
-  function getDepth(n, d) { maxDepth = Math.max(maxDepth, d); if (!collapsed[n.name]) n.children.forEach(c => getDepth(c, d+1)); }
-  activeRoots.forEach(r => getDepth(r, 0));
-  document.getElementById('stat-people').innerHTML = `<b>${all.length}</b> people`;
-  document.getElementById('stat-levels').innerHTML = `<b>${maxDepth+1}</b> level${maxDepth ? 's' : ''}`;
+  var realPeople = Object.keys(allNodes).filter(function(id){return !allNodes[id]._synthetic;});
+  var maxDepth = 0;
+  function getDepth(n,d){maxDepth=Math.max(maxDepth,d);if(!collapsed[n._id])n.children.forEach(function(c){getDepth(c,d+1);});}
+  activeRoots.forEach(function(r){getDepth(r,0);});
+  document.getElementById('stat-people').innerHTML = '<b>'+realPeople.length+'</b> people';
+  document.getElementById('stat-levels').innerHTML = '<b>'+(maxDepth+1)+'</b> level'+(maxDepth?'s':'');
 
-  // Collect visible nodes
-  function collectVisible(n, nodes = []) {
-    nodes.push(n);
-    if (!collapsed[n.name]) n.children.forEach(c => collectVisible(c, nodes));
-    return nodes;
+  function collectVisible(n, arr) {
+    arr = arr||[];
+    arr.push(n);
+    if (!collapsed[n._id]) n.children.forEach(function(c){collectVisible(c,arr);});
+    return arr;
   }
-  const visible = activeRoots.flatMap(r => collectVisible(r));
+  var visible = [];
+  activeRoots.forEach(function(r){collectVisible(r,visible);});
 
-  // Draw edges first
-  visible.forEach(node => {
-    if (collapsed[node.name]) return;
-    node.children.forEach(child => {
-      const px = node.x + NW/2, py = node.y + node.nh;
-      const cx = child.x + NW/2, cy = child.y;
-      const my = py + (cy - py) * 0.48;
-      const path = document.createElementNS('http://www.w3.org/2000/svg','path');
-      path.setAttribute('d', `M${px},${py} C${px},${my} ${cx},${my} ${cx},${cy}`);
+  // Draw edges
+  visible.forEach(function(node) {
+    if (collapsed[node._id]) return;
+    node.children.forEach(function(child) {
+      var px=node.x+NW/2, py=node.y+node.nh;
+      var cx=child.x+NW/2, cy=child.y;
+      var my=py+(cy-py)*0.48;
+      var path=document.createElementNS('http://www.w3.org/2000/svg','path');
+      path.setAttribute('d','M'+px+','+py+' C'+px+','+my+' '+cx+','+my+' '+cx+','+cy);
       path.setAttribute('fill','none');
       path.setAttribute('stroke','rgba(79,142,247,0.22)');
       path.setAttribute('stroke-width','1.5');
@@ -851,546 +864,459 @@ function render() {
     });
   });
 
-  // Draw nodes
-  visible.forEach(node => {
-    const [bg, fg] = node._synthetic
-      ? ['#3a2a0a', '#f5a623']   // amber tones for uncategorized node
-      : avatarColors(node.name);
-    const hasExtra = node.location || node.email || node.phone || node.directReports > 0;
-    const hasKids  = node.children.length > 0;
-    const isColl   = collapsed[node.name];
+  // Draw nodes -- all user content is passed through esc() before use in HTML
+  visible.forEach(function(node) {
+    var colors = node._synthetic ? ['#3a2a0a','#f5a623'] : avatarColors(node.name);
+    var bg = colors[0], fg = colors[1];
+    var hasExtra = node.location || node.email || node.phone || node.directReports > 0;
+    var hasKids  = node.children.length > 0;
+    var isColl   = collapsed[node._id];
 
-    const el = document.createElement('div');
-    el.className = 'node' + (isColl ? ' collapsed-node' : '') + (node._synthetic ? ' uncategorized' : '');
-    el.dataset.name = node.name;
-    el.style.cssText = `left:${node.x}px;top:${node.y}px;width:${NW}px`;
+    var el = document.createElement('div');
+    el.className = 'node'+(isColl?' collapsed-node':'')+(node._synthetic?' uncategorized':'');
+    el.dataset.nodeId = node._id;
+    el.style.cssText = 'left:'+node.x+'px;top:'+node.y+'px;width:'+NW+'px';
 
-    // Footer (always if has children)
-    const footerHTML = hasKids ? `
-      <div class="node-footer">
-        <span class="node-reports">${node.directReports} direct${node.directReports !== 1 ? 's' : ''}</span>
-        <span class="collapse-btn${isColl ? ' is-collapsed' : ''}" data-name="${esc(node.name)}">
-          ${isColl ? `▸ ${node.children.length} hidden` : '▾ collapse'}
-        </span>
-      </div>` : '';
+    // Build HTML -- user values are sanitized by esc() before insertion
+    var actionsHTML = node._synthetic ? '' :
+      '<div class="node-actions">'+
+        '<button class="action-btn edit-btn" data-node-id="'+node._id+'" title="Edit contact">'+ICON_PENCIL+'</button>'+
+        '<button class="action-btn focus-btn" data-node-id="'+node._id+'" title="Focus on '+esc(node.name)+'">'+ICON_FOCUS+'</button>'+
+      '</div>';
 
-    el.innerHTML = `
-      <div class="node-header">
-        <div class="node-avatar" style="background:${bg};color:${fg}">${initials(node.name)}</div>
-        <div style="min-width:0">
-          <div class="node-name" title="${esc(node.name)}">${esc(node.name)}</div>
-          <div class="node-role" title="${esc(node.role)}">${esc(node.role) || '&nbsp;'}</div>
-        </div>
-        ${node.rel ? `<div class="rel-dot ${node.rel}" title="Relationship: ${node.rel}"></div>` : ''}
-      </div>
-      ${hasExtra ? '<div class="node-divider"></div>' : ''}
-      ${node.location ? `<div class="node-field">${ICONS.loc}<span title="${esc(node.location)}">${esc(node.location)}</span></div>` : ''}
-      ${node.email    ? `<div class="node-field">${ICONS.email}<a href="mailto:${esc(node.email)}" title="${esc(node.email)}">${esc(node.email)}</a></div>` : ''}
-      ${node.phone    ? `<div class="node-field">${ICONS.phone}<a href="tel:${esc(node.phone)}" title="${esc(node.phone)}">${esc(node.phone)}</a></div>` : ''}
-      ${footerHTML}
-    `;
+    var footerHTML = hasKids ?
+      '<div class="node-footer">'+
+        '<span class="node-reports">'+node.directReports+' direct'+(node.directReports!==1?'s':'')+'</span>'+
+        '<span class="collapse-btn'+(isColl?' is-collapsed':'')+'" data-node-id="'+node._id+'">'+
+          (isColl ? '&#9658; '+node.children.length+' hidden' : '&#9662; collapse')+
+        '</span>'+
+      '</div>' : '';
+
+    var html =
+      actionsHTML+
+      '<div class="node-header">'+
+        '<div class="node-avatar" style="background:'+bg+';color:'+fg+'">'+esc(initials(node.name))+'</div>'+
+        '<div style="min-width:0">'+
+          '<div class="node-name" title="'+esc(node.name)+'">'+esc(node.name)+'</div>'+
+          '<div class="node-role" title="'+esc(node.role)+'">'+( esc(node.role)||'&nbsp;' )+'</div>'+
+        '</div>'+
+        (node.rel ? '<div class="rel-dot '+node.rel+'" title="Relationship: '+node.rel+'"></div>' : '')+
+      '</div>'+
+      (hasExtra ? '<div class="node-divider"></div>' : '')+
+      (node.location ? '<div class="node-field">'+ICON_LOC+'<span title="'+esc(node.location)+'">'+esc(node.location)+'</span></div>' : '')+
+      (node.email    ? '<div class="node-field">'+ICON_EMAIL+'<a href="mailto:'+esc(node.email)+'" title="'+esc(node.email)+'">'+esc(node.email)+'</a></div>' : '')+
+      (node.phone    ? '<div class="node-field">'+ICON_PHONE+'<a href="tel:'+esc(node.phone)+'" title="'+esc(node.phone)+'">'+esc(node.phone)+'</a></div>' : '')+
+      footerHTML;
+
+    // All user-supplied values are escaped via esc() above; SVG icon strings are static constants
+    el.innerHTML = html;
     canvas.appendChild(el);
   });
 
-  // Collapse button listeners
-  document.querySelectorAll('.collapse-btn').forEach(btn => {
-    btn.addEventListener('click', e => {
+  // Event listeners
+  canvas.querySelectorAll('.collapse-btn').forEach(function(btn) {
+    btn.addEventListener('click', function(e) {
       e.stopPropagation();
-      const name = btn.dataset.name;
-      collapsed[name] = !collapsed[name];
+      collapsed[btn.dataset.nodeId] = !collapsed[btn.dataset.nodeId];
       render();
     });
   });
+  canvas.querySelectorAll('.edit-btn').forEach(function(btn) {
+    btn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      openEditModal(btn.dataset.nodeId);
+    });
+  });
+  canvas.querySelectorAll('.focus-btn').forEach(function(btn) {
+    btn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      setFocus(btn.dataset.nodeId);
+    });
+  });
 }
 
-// ─── Pan & Zoom ───────────────────────────────────────────────────────────────
-const wrap = document.getElementById('canvas-wrap');
+// Pan & Zoom
+var wrap = document.getElementById('canvas-wrap');
 
 function applyTransform() {
-  document.getElementById('canvas').style.transform = `translate(${tx}px,${ty}px) scale(${scale})`;
-  document.getElementById('connections').style.transform = `translate(${tx}px,${ty}px) scale(${scale})`;
-  document.getElementById('zoom-level').textContent = Math.round(scale*100) + '%';
+  document.getElementById('canvas').style.transform = 'translate('+tx+'px,'+ty+'px) scale('+scale+')';
+  document.getElementById('connections').style.transform = 'translate('+tx+'px,'+ty+'px) scale('+scale+')';
+  document.getElementById('zoom-level').textContent = Math.round(scale*100)+'%';
 }
 
 function fitAll() {
-  // Use visible nodes — always include root nodes even when collapsed
-  function collectVisible(n, arr=[]) { arr.push(n); if(!collapsed[n.name]) n.children.forEach(c=>collectVisible(c,arr)); return arr; }
-  var fitRoots = getActiveRoots ? getActiveRoots() : allRoots;
-  const vis = fitRoots.flatMap(r => collectVisible(r));
+  function collectVisible(n,arr){arr=arr||[];arr.push(n);if(!collapsed[n._id])n.children.forEach(function(c){collectVisible(c,arr);});return arr;}
+  var fitRoots = getActiveRoots();
+  var vis = [];
+  fitRoots.forEach(function(r){collectVisible(r,vis);});
   if (!vis.length) return;
-  // Filter to only nodes that have been laid out (have x position)
-  const laid = vis.filter(n => n.x !== undefined);
+  var laid = vis.filter(function(n){return n.x!==undefined;});
   if (!laid.length) return;
-  const minX = Math.min(...laid.map(n=>n.x));
-  const minY = Math.min(...laid.map(n=>n.y));
-  const maxX = Math.max(...laid.map(n=>n.x+NW));
-  const maxY = Math.max(...laid.map(n=>n.y+(n.nh||80)));
-  const ww = wrap.clientWidth, wh = wrap.clientHeight;
-  const pw = maxX-minX, ph = maxY-minY;
-  scale = Math.min((ww-80)/(pw||1), (wh-80)/(ph||1), 1.2);
-  tx = (ww - pw*scale)/2 - minX*scale;
-  ty = Math.max(24, (wh - ph*scale)/2) - minY*scale;
+  var minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+  laid.forEach(function(n){
+    if(n.x<minX)minX=n.x; if(n.y<minY)minY=n.y;
+    if(n.x+NW>maxX)maxX=n.x+NW; if(n.y+(n.nh||80)>maxY)maxY=n.y+(n.nh||80);
+  });
+  var ww=wrap.clientWidth,wh=wrap.clientHeight,pw=maxX-minX,ph=maxY-minY;
+  scale=Math.min((ww-80)/(pw||1),(wh-80)/(ph||1),1.2);
+  tx=(ww-pw*scale)/2-minX*scale;
+  ty=Math.max(24,(wh-ph*scale)/2)-minY*scale;
   applyTransform();
 }
 
-let panning=false, px0, py0, tx0, ty0;
-wrap.addEventListener('mousedown', e => {
-  if (e.target.closest('.node, .tb-btn, .zoom-btn, #fit-btn, #search-input, a, .collapse-btn')) return;
-  panning=true; px0=e.clientX; py0=e.clientY; tx0=tx; ty0=ty;
-  wrap.classList.add('grabbing');
+var panning=false,px0,py0,tx0,ty0;
+wrap.addEventListener('mousedown',function(e){
+  if(e.target.closest('.node,.tb-btn,.zoom-btn,#fit-btn,#search-input,a,.collapse-btn,.action-btn'))return;
+  panning=true;px0=e.clientX;py0=e.clientY;tx0=tx;ty0=ty;wrap.classList.add('grabbing');
 });
-document.addEventListener('mousemove', e => {
-  if (!panning) return;
-  tx=tx0+e.clientX-px0; ty=ty0+e.clientY-py0; applyTransform();
-});
-document.addEventListener('mouseup', () => { panning=false; wrap.classList.remove('grabbing'); });
-
-wrap.addEventListener('wheel', e => {
+document.addEventListener('mousemove',function(e){if(!panning)return;tx=tx0+e.clientX-px0;ty=ty0+e.clientY-py0;applyTransform();});
+document.addEventListener('mouseup',function(){panning=false;wrap.classList.remove('grabbing');});
+wrap.addEventListener('wheel',function(e){
   e.preventDefault();
-  const r = wrap.getBoundingClientRect();
-  const mx=e.clientX-r.left, my=e.clientY-r.top;
-  const delta = e.deltaY>0 ? 0.9 : 1.11;
-  const ns = Math.max(0.08, Math.min(3.5, scale*delta));
-  tx = mx-(mx-tx)*(ns/scale); ty = my-(my-ty)*(ns/scale);
-  scale=ns; applyTransform();
-}, {passive:false});
+  var r=wrap.getBoundingClientRect(),mx=e.clientX-r.left,my=e.clientY-r.top;
+  var delta=e.deltaY>0?0.9:1.11;
+  var ns=Math.max(0.08,Math.min(3.5,scale*delta));
+  tx=mx-(mx-tx)*(ns/scale);ty=my-(my-ty)*(ns/scale);scale=ns;applyTransform();
+},{passive:false});
+document.getElementById('zoom-in').onclick=function(){scale=Math.min(3.5,scale*1.2);applyTransform();};
+document.getElementById('zoom-out').onclick=function(){scale=Math.max(0.08,scale/1.2);applyTransform();};
+document.getElementById('fit-btn').onclick=fitAll;
 
-document.getElementById('zoom-in').onclick  = () => { scale=Math.min(3.5,scale*1.2); applyTransform(); };
-document.getElementById('zoom-out').onclick = () => { scale=Math.max(0.08,scale/1.2); applyTransform(); };
-document.getElementById('fit-btn').onclick  = fitAll;
+var t1x,t1y,tt0x,tt0y;
+wrap.addEventListener('touchstart',function(e){if(e.touches.length===1){t1x=e.touches[0].clientX;t1y=e.touches[0].clientY;tt0x=tx;tt0y=ty;}});
+wrap.addEventListener('touchmove',function(e){e.preventDefault();if(e.touches.length===1){tx=tt0x+e.touches[0].clientX-t1x;ty=tt0y+e.touches[0].clientY-t1y;applyTransform();}},{passive:false});
 
-// Touch
-let t1x,t1y,tt0x,tt0y;
-wrap.addEventListener('touchstart', e=>{ if(e.touches.length===1){t1x=e.touches[0].clientX;t1y=e.touches[0].clientY;tt0x=tx;tt0y=ty;} });
-wrap.addEventListener('touchmove', e=>{ e.preventDefault(); if(e.touches.length===1){tx=tt0x+e.touches[0].clientX-t1x;ty=tt0y+e.touches[0].clientY-t1y;applyTransform();} },{passive:false});
-
-// ─── Search ───────────────────────────────────────────────────────────────────
-document.getElementById('search-input').addEventListener('input', e => {
-  const q = e.target.value.trim().toLowerCase();
-  const matchedNodes = [];
-
-  document.querySelectorAll('.node').forEach(el => {
-    const name = el.dataset.name;
-    const node = allNodes[name];
-    if (!node) return;
-    if (!q) { el.classList.remove('highlighted','dimmed'); return; }
-    const match = [node.name, node.role, node.location, node.email, node.phone]
-      .some(v => (v||'').toLowerCase().includes(q));
-    el.classList.toggle('highlighted', match);
-    el.classList.toggle('dimmed', !match);
-    if (match) matchedNodes.push(node);
+// Search
+document.getElementById('search-input').addEventListener('input',function(e){
+  var q=e.target.value.trim().toLowerCase();
+  var matched=[];
+  document.querySelectorAll('.node').forEach(function(el){
+    var node=allNodes[el.dataset.nodeId];
+    if(!node)return;
+    if(!q){el.classList.remove('highlighted','dimmed');return;}
+    var match=[node.name,node.role,node.location,node.email,node.phone].some(function(v){return(v||'').toLowerCase().indexOf(q)!==-1;});
+    el.classList.toggle('highlighted',match);
+    el.classList.toggle('dimmed',!match);
+    if(match)matched.push(node);
   });
-
-  // Pan and zoom to matched nodes
-  if (q && matchedNodes.length > 0) {
-    const NW = 220;
-    const PAD = 80;
-    const minX = Math.min(...matchedNodes.map(n => n.x)) - PAD;
-    const minY = Math.min(...matchedNodes.map(n => n.y)) - PAD;
-    const maxX = Math.max(...matchedNodes.map(n => n.x + NW)) + PAD;
-    const maxY = Math.max(...matchedNodes.map(n => n.y + (n.nh || 80))) + PAD;
-    const ww = wrap.clientWidth, wh = wrap.clientHeight;
-    const pw = maxX - minX, ph = maxY - minY;
-    // Zoom to fit matches but don't zoom in too far for single nodes
-    const newScale = Math.min((ww - 80) / (pw || 1), (wh - 80) / (ph || 1), 1.4);
-    tx = (ww - pw * newScale) / 2 - minX * newScale;
-    ty = Math.max(24, (wh - ph * newScale) / 2) - minY * newScale;
-    scale = newScale;
-    applyTransform();
+  if(q&&matched.length>0){
+    var PAD=80;
+    var minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+    matched.forEach(function(n){
+      if(n.x-PAD<minX)minX=n.x-PAD;if(n.y-PAD<minY)minY=n.y-PAD;
+      if(n.x+NW+PAD>maxX)maxX=n.x+NW+PAD;if(n.y+(n.nh||80)+PAD>maxY)maxY=n.y+(n.nh||80)+PAD;
+    });
+    var ww=wrap.clientWidth,wh=wrap.clientHeight,pw=maxX-minX,ph=maxY-minY;
+    var ns=Math.min((ww-80)/(pw||1),(wh-80)/(ph||1),1.4);
+    tx=(ww-pw*ns)/2-minX*ns;ty=Math.max(24,(wh-ph*ns)/2)-minY*ns;scale=ns;applyTransform();
   }
 });
 
-// ─── Expand / Collapse all ────────────────────────────────────────────────────
-document.getElementById('expand-all-btn').addEventListener('click', () => {
-  collapsed = {};
-  render(); fitAll();
-});
-document.getElementById('collapse-all-btn').addEventListener('click', () => {
-  function collapseAll(n) {
-    if (n.children.length) { collapsed[n.name] = true; n.children.forEach(collapseAll); }
-  }
-  getActiveRoots().forEach(collapseAll);
-  render(); fitAll();
+// Expand / Collapse all
+document.getElementById('expand-all-btn').addEventListener('click',function(){collapsed={};render();fitAll();});
+document.getElementById('collapse-all-btn').addEventListener('click',function(){
+  function collapseAll(n){if(n.children.length){collapsed[n._id]=true;n.children.forEach(collapseAll);}}
+  getActiveRoots().forEach(collapseAll);render();fitAll();
 });
 
-// ─── Export PNG ───────────────────────────────────────────────────────────────
-document.getElementById('export-btn').addEventListener('click', () => {
-  showToast('Preparing export…');
-
-  setTimeout(() => {
-    // Export exactly what's visible in the viewport at 2x resolution
-    const canvasWrap = document.getElementById('canvas-wrap');
-    const W = canvasWrap.clientWidth;
-    const H = canvasWrap.clientHeight;
-    const DPR = 2;
-
-    const canvas2 = document.createElement('canvas');
-    canvas2.width = W * DPR;
-    canvas2.height = H * DPR;
-    const ctx = canvas2.getContext('2d');
-    if (!ctx) { showToast('Export failed'); return; }
-    ctx.scale(DPR, DPR);
-
-    // Background
-    ctx.fillStyle = isLight ? '#f4f5f7' : '#0c0c10';
-    ctx.fillRect(0, 0, W, H);
-
-    // Dot grid
-    ctx.fillStyle = isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.025)';
-    const gridSize = 28;
-    for (let gx = 0; gx < W; gx += gridSize) {
-      for (let gy = 0; gy < H; gy += gridSize) {
-        ctx.beginPath();
-        ctx.arc(gx, gy, 1, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    }
-
-    // Apply current pan/zoom transform
-    ctx.save();
-    ctx.translate(tx, ty);
-    ctx.scale(scale, scale);
-
-    // Collect visible nodes excluding synthetic
-    function collectVisible(n, arr=[]) {
-      if (n._synthetic) return arr;
-      arr.push(n);
-      if (!collapsed[n.name]) n.children.forEach(c => collectVisible(c, arr));
-      return arr;
-    }
-    const vis = getActiveRoots().flatMap(r => collectVisible(r)).filter(n => n.x !== undefined);
-    const visNames = new Set(vis.map(n => n.name));
-
-    // Draw connections
-    vis.forEach(node => {
-      if (collapsed[node.name]) return;
-      node.children.forEach(child => {
-        if (!visNames.has(child.name)) return;
-        const px = node.x + NW/2, py = node.y + node.nh;
-        const cx = child.x + NW/2, cy = child.y;
-        const my = py + (cy - py) * 0.48;
-        ctx.beginPath();
-        ctx.moveTo(px, py);
-        ctx.bezierCurveTo(px, my, cx, my, cx, cy);
-        ctx.strokeStyle = isLight ? 'rgba(37,99,235,0.25)' : 'rgba(79,142,247,0.22)';
-        ctx.lineWidth = 1.5 / scale;
-        ctx.stroke();
+// Export PNG
+document.getElementById('export-btn').addEventListener('click',function(){
+  showToast('Preparing export\u2026');
+  setTimeout(function(){
+    var W=wrap.clientWidth,H=wrap.clientHeight,DPR=2;
+    var c2=document.createElement('canvas');
+    c2.width=W*DPR;c2.height=H*DPR;
+    var ctx=c2.getContext('2d');
+    if(!ctx){showToast('Export failed');return;}
+    ctx.scale(DPR,DPR);
+    ctx.fillStyle=isLight?'#f4f5f7':'#0c0c10';ctx.fillRect(0,0,W,H);
+    ctx.fillStyle=isLight?'rgba(0,0,0,0.05)':'rgba(255,255,255,0.025)';
+    for(var gx=0;gx<W;gx+=28){for(var gy=0;gy<H;gy+=28){ctx.beginPath();ctx.arc(gx,gy,1,0,Math.PI*2);ctx.fill();}}
+    ctx.save();ctx.translate(tx,ty);ctx.scale(scale,scale);
+    function collectVis(n,arr){if(n._synthetic)return arr;arr.push(n);if(!collapsed[n._id])n.children.forEach(function(c){collectVis(c,arr);});return arr;}
+    var vis=[];getActiveRoots().forEach(function(r){collectVis(r,vis);});
+    vis=vis.filter(function(n){return n.x!==undefined;});
+    var visIds={};vis.forEach(function(n){visIds[n._id]=1;});
+    vis.forEach(function(node){
+      if(collapsed[node._id])return;
+      node.children.forEach(function(child){
+        if(!visIds[child._id])return;
+        var px=node.x+NW/2,py=node.y+node.nh,cx=child.x+NW/2,cy=child.y,my=py+(cy-py)*0.48;
+        ctx.beginPath();ctx.moveTo(px,py);ctx.bezierCurveTo(px,my,cx,my,cx,cy);
+        ctx.strokeStyle=isLight?'rgba(37,99,235,0.25)':'rgba(79,142,247,0.22)';
+        ctx.lineWidth=1.5/scale;ctx.stroke();
       });
     });
-
-    // Draw nodes
-    vis.forEach(node => {
-      const x = node.x, y = node.y, w = NW, h = node.nh || 80;
-      const [bg, fg] = avatarColors(node.name);
-
-      roundRect(ctx, x, y, w, h, 12);
-      ctx.fillStyle = isLight ? '#ffffff' : '#141418';
-      ctx.fill();
-      ctx.strokeStyle = isLight ? 'rgba(0,0,0,0.14)' : 'rgba(255,255,255,0.13)';
-      ctx.lineWidth = 1 / scale;
-      ctx.stroke();
-
-      // Avatar
-      ctx.beginPath();
-      ctx.arc(x+31, y+31, 17, 0, Math.PI*2);
-      ctx.fillStyle = bg; ctx.fill();
-      ctx.fillStyle = fg;
-      ctx.font = '700 11px monospace';
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText(initials(node.name), x+31, y+31);
-
-      // Name
-      ctx.fillStyle = isLight ? '#1a1a2e' : '#e6e6ec';
-      ctx.font = '600 12px Inter, system-ui, sans-serif';
-      ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-      ctx.fillText(node.name.length > 22 ? node.name.slice(0,21)+'…' : node.name, x+52, y+14);
-
-      // Role
-      if (node.role) {
-        ctx.fillStyle = isLight ? '#6b7280' : '#6a6a7a';
-        ctx.font = '400 10px Inter, system-ui, sans-serif';
-        ctx.fillText(node.role.length > 26 ? node.role.slice(0,25)+'…' : node.role, x+52, y+30);
+    vis.forEach(function(node){
+      var x=node.x,y=node.y,w=NW,h=node.nh||80;
+      var colors=avatarColors(node.name);var bg=colors[0],fg=colors[1];
+      roundRect(ctx,x,y,w,h,12);
+      ctx.fillStyle=isLight?'#ffffff':'#141418';ctx.fill();
+      ctx.strokeStyle=isLight?'rgba(0,0,0,0.14)':'rgba(255,255,255,0.13)';ctx.lineWidth=1/scale;ctx.stroke();
+      ctx.beginPath();ctx.arc(x+31,y+31,17,0,Math.PI*2);ctx.fillStyle=bg;ctx.fill();
+      ctx.fillStyle=fg;ctx.font='700 11px monospace';ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.fillText(initials(node.name),x+31,y+31);
+      ctx.fillStyle=isLight?'#1a1a2e':'#e6e6ec';ctx.font='600 12px Inter,system-ui,sans-serif';
+      ctx.textAlign='left';ctx.textBaseline='top';
+      ctx.fillText(node.name.length>22?node.name.slice(0,21)+'\u2026':node.name,x+52,y+14);
+      if(node.role){
+        ctx.fillStyle=isLight?'#6b7280':'#6a6a7a';ctx.font='400 10px Inter,system-ui,sans-serif';
+        ctx.fillText(node.role.length>26?node.role.slice(0,25)+'\u2026':node.role,x+52,y+30);
       }
-
-      // Location
-      let fieldY = y + 62;
-      if (node.location) {
-        ctx.fillStyle = isLight ? '#6b7280' : '#6a6a7a';
-        ctx.font = '400 10px Inter, system-ui, sans-serif';
-        ctx.fillText('📍 ' + node.location, x+14, fieldY);
-        fieldY += 17;
-      }
-
-      // Email
-      if (node.email) {
-        ctx.fillStyle = isLight ? '#2563eb' : '#4f8ef7';
-        ctx.font = '400 10px Inter, system-ui, sans-serif';
-        ctx.fillText('✉ ' + (node.email.length > 26 ? node.email.slice(0,25)+'…' : node.email), x+14, fieldY);
-      }
-
-      // Relationship dot
-      if (node.rel) {
-        const dotColors = { green: '#2ecc8e', yellow: '#f5a623', red: '#f76f6f' };
-        if (dotColors[node.rel]) {
-          ctx.beginPath();
-          ctx.arc(x + w - 14, y + 14, 5, 0, Math.PI * 2);
-          ctx.fillStyle = dotColors[node.rel];
-          ctx.fill();
-        }
-      }
-
-      // Collapsed indicator
-      if (collapsed[node.name] && node.children.length) {
-        ctx.fillStyle = isLight ? '#d97706' : '#f5a623';
-        ctx.font = '500 10px monospace';
-        ctx.fillText('\u25b8 ' + node.children.length + ' hidden', x + w - 80, y + h - 16);
-      }
+      var fy=y+62;
+      if(node.location){ctx.fillStyle=isLight?'#6b7280':'#6a6a7a';ctx.font='400 10px Inter,system-ui,sans-serif';ctx.fillText('\uD83D\uDCCD '+node.location,x+14,fy);fy+=17;}
+      if(node.email){ctx.fillStyle=isLight?'#2563eb':'#4f8ef7';ctx.font='400 10px Inter,system-ui,sans-serif';ctx.fillText('\u2709 '+(node.email.length>26?node.email.slice(0,25)+'\u2026':node.email),x+14,fy);}
+      if(node.rel){var dc={green:'#2ecc8e',yellow:'#f5a623',red:'#f76f6f'};if(dc[node.rel]){ctx.beginPath();ctx.arc(x+w-14,y+14,5,0,Math.PI*2);ctx.fillStyle=dc[node.rel];ctx.fill();}}
+      if(collapsed[node._id]&&node.children.length){ctx.fillStyle=isLight?'#d97706':'#f5a623';ctx.font='500 10px monospace';ctx.fillText('\u25b8 '+node.children.length+' hidden',x+w-80,y+h-16);}
     });
-
     ctx.restore();
-
-    const a = document.createElement('a');
-    a.download = 'orgchart.png';
-    a.href = canvas2.toDataURL('image/png');
-    a.click();
-    showToast('PNG exported ✓');
-  }, 80);
+    var a=document.createElement('a');a.download='orgchart.png';a.href=c2.toDataURL('image/png');a.click();
+    showToast('PNG exported \u2713');
+  },80);
 });
 
-function roundRect(ctx, x, y, w, h, r) {
-  ctx.beginPath();
-  ctx.moveTo(x+r, y);
-  ctx.lineTo(x+w-r, y); ctx.quadraticCurveTo(x+w, y, x+w, y+r);
-  ctx.lineTo(x+w, y+h-r); ctx.quadraticCurveTo(x+w, y+h, x+w-r, y+h);
-  ctx.lineTo(x+r, y+h); ctx.quadraticCurveTo(x, y+h, x, y+h-r);
-  ctx.lineTo(x, y+r); ctx.quadraticCurveTo(x, y, x+r, y);
-  ctx.closePath();
+function roundRect(ctx,x,y,w,h,r){
+  ctx.beginPath();ctx.moveTo(x+r,y);
+  ctx.lineTo(x+w-r,y);ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+  ctx.lineTo(x+w,y+h-r);ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  ctx.lineTo(x+r,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+  ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);ctx.closePath();
 }
 
-// ─── Theme toggle ─────────────────────────────────────────────────────────────
+// Theme
 var isLight = localStorage.getItem('orgmapper-theme') !== 'dark';
-
 function applyTheme() {
-  if (isLight) {
-    document.documentElement.classList.add('light');
-    document.getElementById('theme-label').textContent = 'Light mode';
-  } else {
-    document.documentElement.classList.remove('light');
-    document.getElementById('theme-label').textContent = 'Dark mode';
-  }
-  localStorage.setItem('orgmapper-theme', isLight ? 'light' : 'dark');
+  if(isLight){document.documentElement.classList.add('light');document.getElementById('theme-label').textContent='Light mode';}
+  else{document.documentElement.classList.remove('light');document.getElementById('theme-label').textContent='Dark mode';}
+  localStorage.setItem('orgmapper-theme',isLight?'light':'dark');
 }
-
-document.getElementById('theme-toggle').addEventListener('click', function() {
-  isLight = !isLight;
-  applyTheme();
-});
-
+document.getElementById('theme-toggle').addEventListener('click',function(){isLight=!isLight;applyTheme();});
 applyTheme();
-let toastTimer;
-function showToast(msg) {
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.classList.add('show');
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+
+var toastTimer;
+function showToast(msg){
+  var t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');
+  clearTimeout(toastTimer);toastTimer=setTimeout(function(){t.classList.remove('show');},2200);
 }
 
-// ─── Upload flow ──────────────────────────────────────────────────────────────
-let parsedData = null;
-const fileInput  = document.getElementById('file-input');
-const dropZone   = document.getElementById('drop-zone');
-const renderBtn  = document.getElementById('render-btn');
-const fileStatus = document.getElementById('file-status');
-const errorEl    = document.getElementById('upload-error');
+// Upload flow
+var parsedData=null;
+var fileInput=document.getElementById('file-input');
+var dropZone=document.getElementById('drop-zone');
+var renderBtn=document.getElementById('render-btn');
+var fileStatus=document.getElementById('file-status');
+var errorEl=document.getElementById('upload-error');
 
-function handleFile(file) {
-  errorEl.textContent=''; fileStatus.textContent='';
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = ev => {
-    const data = parseCSV(ev.target.result);
-    if (!data) {
-      errorEl.textContent = 'Could not parse — make sure the file has a "name" column.';
-      renderBtn.disabled = true; return;
-    }
-    parsedData = data;
-    fileStatus.textContent = `✓ ${file.name}  ·  ${data.length} people found`;
-    renderBtn.disabled = false;
+function handleFile(file){
+  errorEl.textContent='';fileStatus.textContent='';
+  if(!file)return;
+  sourceFileName=file.name.replace(/\.[^.]+$/,'')||'orgchart';
+  var reader=new FileReader();
+  reader.onload=function(ev){
+    var data=parseCSV(ev.target.result);
+    if(!data){errorEl.textContent='Could not parse \u2014 make sure the file has a "name" column.';renderBtn.disabled=true;return;}
+    parsedData=data;
+    fileStatus.textContent='\u2713 '+file.name+'  \u00b7  '+data.length+' people found';
+    renderBtn.disabled=false;
   };
   reader.readAsText(file);
 }
 
-fileInput.addEventListener('change', () => handleFile(fileInput.files[0]));
-dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
-dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
-dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('dragover'); handleFile(e.dataTransfer.files[0]); });
+fileInput.addEventListener('change',function(){handleFile(fileInput.files[0]);});
+dropZone.addEventListener('dragover',function(e){e.preventDefault();dropZone.classList.add('dragover');});
+dropZone.addEventListener('dragleave',function(){dropZone.classList.remove('dragover');});
+dropZone.addEventListener('drop',function(e){e.preventDefault();dropZone.classList.remove('dragover');handleFile(e.dataTransfer.files[0]);});
 
-renderBtn.addEventListener('click', () => {
-  if (!parsedData) return;
-  const { roots, byName } = buildTree(parsedData);
-  allRoots = roots;
-  allNodes = byName;
-  focusNode = null;
-  collapsed = {};
-  // Auto-collapse the Uncategorized node on load so it doesn't dominate
-  if (byName['Uncategorized']) {
-    collapsed['Uncategorized'] = true;
-  }
+renderBtn.addEventListener('click',function(){
+  if(!parsedData)return;
+  people=parsedData;
+  var result=buildTree(people);
+  allRoots=result.roots;allNodes=result.byId;allNodesByName=result.byName;
+  focusNode=null;collapsed={};isDirty=false;updateDirtyBanner();
+  if(allNodes['__uncategorized__'])collapsed['__uncategorized__']=true;
   document.getElementById('upload-screen').classList.add('hidden');
   document.getElementById('focus-banner').classList.remove('visible');
-  render();
-  setTimeout(fitAll, 60);
+  render();setTimeout(fitAll,60);
 });
 
-document.getElementById('reset-btn').addEventListener('click', () => {
-  parsedData = null;
-  renderBtn.disabled = true;
-  fileStatus.textContent = '';
-  errorEl.textContent = '';
-  fileInput.value = '';
-  focusNode = null;
+document.getElementById('reset-btn').addEventListener('click',function(){
+  parsedData=null;people=[];allNodes={};allNodesByName={};allRoots=[];
+  renderBtn.disabled=true;fileStatus.textContent='';errorEl.textContent='';fileInput.value='';
+  focusNode=null;isDirty=false;updateDirtyBanner();
   document.getElementById('upload-screen').classList.remove('hidden');
   document.getElementById('focus-banner').classList.remove('visible');
-  document.getElementById('canvas').innerHTML = '';
-  document.getElementById('connections').innerHTML = '';
-  document.getElementById('stat-people').innerHTML = '<b>—</b> people';
-  document.getElementById('stat-levels').innerHTML = '<b>—</b> levels';
+  document.getElementById('canvas').textContent='';
+  document.getElementById('connections').textContent='';
+  document.getElementById('stat-people').innerHTML='<b>\u2014</b> people';
+  document.getElementById('stat-levels').innerHTML='<b>\u2014</b> levels';
 });
 
-// ─── Focus mode ───────────────────────────────────────────────────────────────
-
-function setFocus(name) {
-  focusNode = name || null;
-  var banner = document.getElementById('focus-banner');
-  if (focusNode) {
-    document.getElementById('focus-name').textContent = focusNode;
+// Focus mode
+function setFocus(id){
+  focusNode=id||null;
+  var banner=document.getElementById('focus-banner');
+  if(focusNode&&allNodes[focusNode]){
+    document.getElementById('focus-name').textContent=allNodes[focusNode].name;
     banner.classList.add('visible');
   } else {
-    banner.classList.remove('visible');
+    focusNode=null;banner.classList.remove('visible');
   }
-  // Clear search state so highlighted/dimmed classes don't bleed into focused render
-  var searchInput = document.getElementById('search-input');
-  if (searchInput) searchInput.value = '';
-  document.querySelectorAll('.node').forEach(function(el) {
-    el.classList.remove('highlighted', 'dimmed');
-  });
-  // Collapse everything except the first level under the focused node
-  // Result: focused person visible, direct reports visible but collapsed, rest hidden
-  collapsed = {};
-  if (focusNode && allNodes[focusNode]) {
-    function collapseBelow(node, depth) {
-      if (depth >= 1 && node.children.length) {
-        collapsed[node.name] = true;
-      }
-      node.children.forEach(function(child) {
-        collapseBelow(child, depth + 1);
-      });
+  var si=document.getElementById('search-input');if(si)si.value='';
+  document.querySelectorAll('.node').forEach(function(el){el.classList.remove('highlighted','dimmed');});
+  collapsed={};
+  if(focusNode&&allNodes[focusNode]){
+    function collapseBelow(node,depth){
+      if(depth>=1&&node.children.length)collapsed[node._id]=true;
+      node.children.forEach(function(c){collapseBelow(c,depth+1);});
     }
-    collapseBelow(allNodes[focusNode], 0);
+    collapseBelow(allNodes[focusNode],0);
   }
-  render();
-  setTimeout(fitAll, 60);
+  render();setTimeout(fitAll,60);
 }
 
-document.getElementById('focus-reset').addEventListener('click', function() {
-  setFocus(null);
-});
+document.getElementById('focus-reset').addEventListener('click',function(){setFocus(null);});
 
-// Override allRoots usage in render to respect focusNode
-// We patch getRoots() to return focused subtree when active
-function getActiveRoots() {
-  if (!focusNode || !allNodes[focusNode]) return allRoots;
+function getActiveRoots(){
+  if(!focusNode||!allNodes[focusNode])return allRoots;
   return [allNodes[focusNode]];
 }
 
-// ─── Context menu ─────────────────────────────────────────────────────────────
-var ctxTargetName = null;
-var ctxMenu = document.getElementById('ctx-menu');
+// Edit modal
+var editingId=null;
 
-function showCtxMenu(x, y, name) {
-  ctxTargetName = name;
-  var node = allNodes[name];
-  document.getElementById('ctx-name-label').textContent = name;
-  // Show/hide expand/collapse based on whether node has children
-  var hasKids = node && node.children.length > 0;
-  document.getElementById('ctx-expand-node').style.display = hasKids ? 'flex' : 'none';
-  document.getElementById('ctx-collapse-node').style.display = hasKids ? 'flex' : 'none';
-  // Position menu, keep on screen
-  ctxMenu.style.left = Math.min(x, window.innerWidth - 200) + 'px';
-  ctxMenu.style.top = Math.min(y, window.innerHeight - 150) + 'px';
-  ctxMenu.classList.add('visible');
+function openEditModal(id){
+  var node=allNodes[id];
+  if(!node||node._synthetic)return;
+  editingId=id;
+  document.getElementById('edit-name').value    =node.name;
+  document.getElementById('edit-role').value    =node.role||'';
+  document.getElementById('edit-location').value=node.location||'';
+  document.getElementById('edit-email').value   =node.email||'';
+  document.getElementById('edit-phone').value   =node.phone||'';
+  document.getElementById('edit-rel').value     =node.rel||'';
+  var managerNode=node.managerId!=null?allNodes[node.managerId]:null;
+  document.getElementById('edit-manager').value =managerNode?managerNode.name:'';
+  // Populate datalist with real people names (excluding self)
+  var dl=document.getElementById('manager-options');
+  while(dl.firstChild)dl.removeChild(dl.firstChild);
+  Object.keys(allNodes).forEach(function(nid){
+    var n=allNodes[nid];
+    if(n._id!==id&&!n._synthetic){
+      var opt=document.createElement('option');
+      opt.value=n.name;
+      dl.appendChild(opt);
+    }
+  });
+  var errEl=document.getElementById('edit-error');
+  errEl.textContent='';errEl.classList.remove('visible');
+  document.getElementById('edit-modal').classList.add('visible');
+  document.getElementById('edit-name').focus();
 }
 
-function hideCtxMenu() {
-  ctxMenu.classList.remove('visible');
-  ctxTargetName = null;
+function closeEditModal(){
+  document.getElementById('edit-modal').classList.remove('visible');
+  editingId=null;
 }
 
-document.addEventListener('click', function(e) {
-  if (!ctxMenu.contains(e.target)) hideCtxMenu();
-});
-document.addEventListener('keydown', function(e) { if (e.key === 'Escape') hideCtxMenu(); });
-
-document.getElementById('ctx-focus').addEventListener('click', function() {
-  if (ctxTargetName) setFocus(ctxTargetName);
-  hideCtxMenu();
-});
-
-document.getElementById('ctx-expand-node').addEventListener('click', function() {
-  if (ctxTargetName) {
-    // Expand just this node (remove from collapsed)
-    collapsed[ctxTargetName] = false;
-    render();
+function wouldCreateCycle(nodeId,candidateId){
+  function inSubtree(n){
+    if(n._id===candidateId)return true;
+    return n.children.some(inSubtree);
   }
-  hideCtxMenu();
-});
+  var node=allNodes[nodeId];
+  return node?inSubtree(node):false;
+}
 
-document.getElementById('ctx-collapse-node').addEventListener('click', function() {
-  if (ctxTargetName) {
-    collapsed[ctxTargetName] = true;
-    render();
-  }
-  hideCtxMenu();
-});
+function saveEdit(){
+  if(!editingId)return;
+  var node=allNodes[editingId];if(!node)return;
+  var newName    =document.getElementById('edit-name').value.trim();
+  var newRole    =document.getElementById('edit-role').value.trim();
+  var newLocation=document.getElementById('edit-location').value.trim();
+  var newEmail   =document.getElementById('edit-email').value.trim();
+  var newPhone   =document.getElementById('edit-phone').value.trim();
+  var newRel     =document.getElementById('edit-rel').value||null;
+  var mgrInput   =document.getElementById('edit-manager').value.trim();
+  var errEl=document.getElementById('edit-error');
+  function showError(msg){errEl.textContent=msg;errEl.classList.add('visible');}
 
-// Attach right-click to nodes (delegated from canvas)
-document.getElementById('canvas').addEventListener('contextmenu', function(e) {
-  var nodeEl = e.target.closest('.node');
-  if (nodeEl) {
-    e.preventDefault();
-    showCtxMenu(e.clientX, e.clientY, nodeEl.dataset.name);
+  if(!newName){showError('Name cannot be blank.');return;}
+  if(newName!==node.name&&allNodesByName[newName]){showError('"'+newName+'" already exists in the chart. Each person must have a unique name.');return;}
+
+  var newManagerName='';
+  if(mgrInput){
+    var mgrNode=allNodesByName[mgrInput];
+    if(!mgrNode){showError('"'+mgrInput+'" doesn\'t match anyone in the chart. Pick a name from the suggestions or leave blank for a root node.');return;}
+    if(mgrNode._id===editingId){showError('A person cannot report to themselves.');return;}
+    if(wouldCreateCycle(editingId,mgrNode._id)){showError('Setting "'+mgrInput+'" as manager would create a circular reporting chain.');return;}
+    newManagerName=mgrNode.name;
   }
-});
+
+  // Update people array (source of truth)
+  var person=null;
+  for(var i=0;i<people.length;i++){if(people[i]._id===editingId){person=people[i];break;}}
+  if(person){
+    var oldName=person.name;
+    person.name=newName;person.role=newRole;person.location=newLocation;
+    person.email=newEmail;person.phone=newPhone;person.rel=newRel;
+    person.manager=newManagerName;
+    // Cascade name change to direct reports' manager strings
+    if(newName!==oldName){
+      people.forEach(function(p){if(p.manager===oldName)p.manager=newName;});
+    }
+  }
+
+  // Rebuild tree
+  var result=buildTree(people);
+  allRoots=result.roots;allNodes=result.byId;allNodesByName=result.byName;
+  if(allNodes['__uncategorized__']&&collapsed['__uncategorized__']===undefined)collapsed['__uncategorized__']=true;
+
+  isDirty=true;updateDirtyBanner();
+  closeEditModal();render();showToast('Contact updated \u2713');
+}
+
+document.getElementById('edit-close').addEventListener('click',closeEditModal);
+document.getElementById('edit-cancel').addEventListener('click',closeEditModal);
+document.getElementById('edit-save').addEventListener('click',saveEdit);
+document.getElementById('edit-modal').addEventListener('click',function(e){if(e.target===document.getElementById('edit-modal'))closeEditModal();});
+document.addEventListener('keydown',function(e){if(e.key==='Escape'&&document.getElementById('edit-modal').classList.contains('visible'))closeEditModal();});
+document.getElementById('edit-modal').addEventListener('keydown',function(e){if(e.key==='Enter'&&e.target.tagName!=='SELECT'){e.preventDefault();saveEdit();}});
+
+// CSV Export
+function exportCSV(){
+  var now=new Date();
+  function pad(n){return String(n).padStart(2,'0');}
+  var stamp=now.getFullYear()+'-'+pad(now.getMonth()+1)+'-'+pad(now.getDate())+'_'+pad(now.getHours())+pad(now.getMinutes());
+  var fileName=sourceFileName+'_'+stamp+'.csv';
+  function csvVal(v){
+    v=v==null?'':String(v);
+    return(v.indexOf(',')!==-1||v.indexOf('"')!==-1||v.indexOf('\n')!==-1)?'"'+v.replace(/"/g,'""')+'"':v;
+  }
+  var header='name,manager,role,location,email,phone,relationship';
+  var rows=people.map(function(p){
+    return [p.name,p.manager||'',p.role||'',p.location||'',p.email||'',p.phone||'',p.rel||''].map(csvVal).join(',');
+  });
+  var csv=header+'\n'+rows.join('\n');
+  var blob=new Blob([csv],{type:'text/csv'});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement('a');a.href=url;a.download=fileName;a.click();
+  URL.revokeObjectURL(url);
+  isDirty=false;updateDirtyBanner();showToast('Saved as '+fileName);
+}
+document.getElementById('dirty-export-btn').addEventListener('click',exportCSV);
 </script>
 
 <script>
-  // Standalone theme toggle - isolated from strict-mode main script
-  (function() {
-    var isLightMode = localStorage.getItem('orgmapper-theme') !== 'dark';
-
-    function applyTheme() {
-      if (isLightMode) {
-        document.documentElement.classList.add('light');
-        var el = document.getElementById('theme-label');
-        if (el) el.textContent = 'Light mode';
-      } else {
-        document.documentElement.classList.remove('light');
-        var el = document.getElementById('theme-label');
-        if (el) el.textContent = 'Dark mode';
-      }
-      localStorage.setItem('orgmapper-theme', isLightMode ? 'light' : 'dark');
-      if (typeof isLight !== 'undefined') isLight = isLightMode;
+  (function(){
+    var isLightMode=localStorage.getItem('orgmapper-theme')!=='dark';
+    function applyTheme(){
+      if(isLightMode){document.documentElement.classList.add('light');var el=document.getElementById('theme-label');if(el)el.textContent='Light mode';}
+      else{document.documentElement.classList.remove('light');var el=document.getElementById('theme-label');if(el)el.textContent='Dark mode';}
+      localStorage.setItem('orgmapper-theme',isLightMode?'light':'dark');
+      if(typeof isLight!=='undefined')isLight=isLightMode;
     }
-
-    var btn = document.getElementById('theme-toggle');
-    if (btn) {
-      btn.addEventListener('click', function() {
-        isLightMode = !isLightMode;
-        applyTheme();
-      });
-    }
-
+    var btn=document.getElementById('theme-toggle');
+    if(btn)btn.addEventListener('click',function(){isLightMode=!isLightMode;applyTheme();});
     applyTheme();
   })();
 </script>

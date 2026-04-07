@@ -158,6 +158,7 @@ Some ideas for improvements:
 
 | Version | Changes |
 |---|---|
+| **v5.0** | In-chart editing: hover any node to reveal pencil (edit) and crosshair (focus) buttons; edit modal covers name, role, location, email, phone, manager (autocomplete with cycle/self-assignment/duplicate-name validation), and relationship health; right-click context menu replaced by hover tray; internal ID system so tree structure is ID-driven and renaming cascades safely; red dirty-state banner when unsaved edits exist; CSV download uses source filename + timestamp (e.g. `acme_2026-04-07_1430.csv`) |
 | **v3.7** | PNG export now captures current viewport at 2x — exports exactly what you see on screen, respecting zoom/pan/collapse state |
 | **v3.6** | PNG export: guard against empty canvas (incomplete fix); relationship dot included in export |
 | **v3.5** | Relationship column: red/yellow/green dot on node cards |
