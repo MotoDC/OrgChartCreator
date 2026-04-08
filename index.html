@@ -1,13 +1,18 @@
 <!DOCTYPE html>
 <!--
   OrgChartCreator
-  Version: 5.0
+  Version: 5.1
   Repository: https://github.com/MotoDC/OrgChartCreator
   Live: https://motodc.github.io/OrgChartCreator/
   License: MIT
   Author: David Chad (MotoDC)
 
   Changelog:
+  v5.1 - Add person: new "+ Add person" button in topbar opens the edit modal
+         in create mode; placement control (Reports to / Root node / Uncategorized)
+         replaces the plain manager text field in both add and edit modes, making
+         intent explicit; "Uncategorized" routes via VACANT so buildTree handles
+         it consistently with bad import data
   v5.0 - In-chart editing: hover any node to reveal pencil (edit) and crosshair
          (focus) buttons; edit modal covers name, role, location, email, phone,
          manager (autocomplete with cycle/self-assignment/duplicate-name validation),
@@ -450,6 +455,23 @@ html, body { height: 100%; overflow: hidden; font-family: var(--font); backgroun
 .modal-btn.secondary:hover { color: var(--text); background: var(--surface3); }
 .modal-btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
 .modal-btn.primary:hover { opacity: 0.88; }
+
+/* Placement segmented control */
+.placement-control {
+  display: flex; gap: 0; border: 1px solid var(--border2);
+  border-radius: 8px; overflow: hidden;
+}
+.placement-btn {
+  flex: 1; background: none; border: none; padding: 7px 6px;
+  font-size: 11.5px; font-family: var(--font); color: var(--muted);
+  cursor: pointer; transition: background 0.12s, color 0.12s;
+  line-height: 1.3; text-align: center;
+}
+.placement-btn + .placement-btn { border-left: 1px solid var(--border2); }
+.placement-btn:hover { background: var(--surface3); color: var(--text); }
+.placement-btn.active { background: var(--accent-glow); color: var(--accent); font-weight: 500; }
+.placement-btn.active.uncat { background: rgba(245,166,35,0.1); color: var(--amber); }
+#manager-input-wrap { margin-top: 8px; }
 </style>
 <script>
   (function() {
@@ -525,6 +547,10 @@ html, body { height: 100%; overflow: hidden; font-family: var(--font); backgroun
     <button class="tb-btn" id="collapse-all-btn">
       <svg viewBox="0 0 24 24"><path d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15h4.5M15 15v4.5m0-4.5l5.25 5.25"/></svg>
       Collapse all
+    </button>
+    <button class="tb-btn" id="add-person-btn">
+      <svg viewBox="0 0 24 24"><path d="M12 4.5v15m7.5-7.5h-15"/></svg>
+      Add person
     </button>
     <button class="tb-btn" id="export-btn">
       <svg viewBox="0 0 24 24"><path d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/></svg>
@@ -610,9 +636,16 @@ html, body { height: 100%; overflow: hidden; font-family: var(--font); backgroun
         </div>
       </div>
       <div class="modal-field">
-        <label>Reports to (manager)</label>
-        <input type="text" id="edit-manager" list="manager-options" placeholder="Leave blank to make a root node" autocomplete="off">
-        <datalist id="manager-options"></datalist>
+        <label>Placement</label>
+        <div class="placement-control">
+          <button type="button" class="placement-btn active" id="place-reports">Reports to&hellip;</button>
+          <button type="button" class="placement-btn" id="place-root">Root node</button>
+          <button type="button" class="placement-btn uncat" id="place-uncat">Uncategorized</button>
+        </div>
+        <div id="manager-input-wrap">
+          <input type="text" id="edit-manager" list="manager-options" placeholder="Type a name&hellip;" autocomplete="off">
+          <datalist id="manager-options"></datalist>
+        </div>
       </div>
     </div>
     <div class="modal-error" id="edit-error"></div>
@@ -1181,32 +1214,83 @@ function getActiveRoots(){
   return [allNodes[focusNode]];
 }
 
-// Edit modal
+// Edit / Add modal
+// editingId === null means "create" mode, otherwise it's the _id being edited
 var editingId=null;
+
+// Placement control helpers
+function setPlacement(mode){
+  // mode: 'reports' | 'root' | 'uncat'
+  document.getElementById('place-reports').classList.toggle('active', mode==='reports');
+  document.getElementById('place-root').classList.toggle('active', mode==='root');
+  document.getElementById('place-uncat').classList.toggle('active', mode==='uncat');
+  document.getElementById('manager-input-wrap').style.display = mode==='reports' ? '' : 'none';
+}
+function getPlacement(){
+  if(document.getElementById('place-root').classList.contains('active')) return 'root';
+  if(document.getElementById('place-uncat').classList.contains('active')) return 'uncat';
+  return 'reports';
+}
+document.getElementById('place-reports').addEventListener('click',function(){setPlacement('reports');document.getElementById('edit-manager').focus();});
+document.getElementById('place-root').addEventListener('click',function(){setPlacement('root');});
+document.getElementById('place-uncat').addEventListener('click',function(){setPlacement('uncat');});
+
+function populateManagerList(excludeId){
+  var dl=document.getElementById('manager-options');
+  while(dl.firstChild)dl.removeChild(dl.firstChild);
+  Object.keys(allNodes).forEach(function(nid){
+    var n=allNodes[nid];
+    if(n._id!==excludeId&&!n._synthetic){
+      var opt=document.createElement('option');opt.value=n.name;dl.appendChild(opt);
+    }
+  });
+}
 
 function openEditModal(id){
   var node=allNodes[id];
   if(!node||node._synthetic)return;
   editingId=id;
+  document.getElementById('edit-modal').querySelector('h3').textContent='Edit contact';
+  document.getElementById('edit-save').textContent='Save changes';
   document.getElementById('edit-name').value    =node.name;
   document.getElementById('edit-role').value    =node.role||'';
   document.getElementById('edit-location').value=node.location||'';
   document.getElementById('edit-email').value   =node.email||'';
   document.getElementById('edit-phone').value   =node.phone||'';
   document.getElementById('edit-rel').value     =node.rel||'';
+  // Set placement control
   var managerNode=node.managerId!=null?allNodes[node.managerId]:null;
-  document.getElementById('edit-manager').value =managerNode?managerNode.name:'';
-  // Populate datalist with real people names (excluding self)
-  var dl=document.getElementById('manager-options');
-  while(dl.firstChild)dl.removeChild(dl.firstChild);
-  Object.keys(allNodes).forEach(function(nid){
-    var n=allNodes[nid];
-    if(n._id!==id&&!n._synthetic){
-      var opt=document.createElement('option');
-      opt.value=n.name;
-      dl.appendChild(opt);
-    }
-  });
+  if(managerNode){
+    setPlacement('reports');
+    document.getElementById('edit-manager').value=managerNode.name;
+  } else if((node.manager||'').trim()===''){
+    setPlacement('root');
+    document.getElementById('edit-manager').value='';
+  } else {
+    // manager string exists but didn't resolve — treat as uncategorized
+    setPlacement('uncat');
+    document.getElementById('edit-manager').value='';
+  }
+  populateManagerList(id);
+  var errEl=document.getElementById('edit-error');
+  errEl.textContent='';errEl.classList.remove('visible');
+  document.getElementById('edit-modal').classList.add('visible');
+  document.getElementById('edit-name').focus();
+}
+
+function openAddModal(){
+  editingId=null;
+  document.getElementById('edit-modal').querySelector('h3').textContent='Add person';
+  document.getElementById('edit-save').textContent='Add person';
+  document.getElementById('edit-name').value='';
+  document.getElementById('edit-role').value='';
+  document.getElementById('edit-location').value='';
+  document.getElementById('edit-email').value='';
+  document.getElementById('edit-phone').value='';
+  document.getElementById('edit-rel').value='';
+  document.getElementById('edit-manager').value='';
+  setPlacement('reports');
+  populateManagerList(null);
   var errEl=document.getElementById('edit-error');
   errEl.textContent='';errEl.classList.remove('visible');
   document.getElementById('edit-modal').classList.add('visible');
@@ -1228,53 +1312,71 @@ function wouldCreateCycle(nodeId,candidateId){
 }
 
 function saveEdit(){
-  if(!editingId)return;
-  var node=allNodes[editingId];if(!node)return;
+  var isCreate=editingId===null;
+  var node=isCreate?null:allNodes[editingId];
+  if(!isCreate&&!node)return;
+
   var newName    =document.getElementById('edit-name').value.trim();
   var newRole    =document.getElementById('edit-role').value.trim();
   var newLocation=document.getElementById('edit-location').value.trim();
   var newEmail   =document.getElementById('edit-email').value.trim();
   var newPhone   =document.getElementById('edit-phone').value.trim();
   var newRel     =document.getElementById('edit-rel').value||null;
+  var placement  =getPlacement();
   var mgrInput   =document.getElementById('edit-manager').value.trim();
   var errEl=document.getElementById('edit-error');
   function showError(msg){errEl.textContent=msg;errEl.classList.add('visible');}
 
   if(!newName){showError('Name cannot be blank.');return;}
-  if(newName!==node.name&&allNodesByName[newName]){showError('"'+newName+'" already exists in the chart. Each person must have a unique name.');return;}
-
-  var newManagerName='';
-  if(mgrInput){
-    var mgrNode=allNodesByName[mgrInput];
-    if(!mgrNode){showError('"'+mgrInput+'" doesn\'t match anyone in the chart. Pick a name from the suggestions or leave blank for a root node.');return;}
-    if(mgrNode._id===editingId){showError('A person cannot report to themselves.');return;}
-    if(wouldCreateCycle(editingId,mgrNode._id)){showError('Setting "'+mgrInput+'" as manager would create a circular reporting chain.');return;}
-    newManagerName=mgrNode.name;
+  // Duplicate name check: for edits skip if name unchanged
+  if((!node||newName!==node.name)&&allNodesByName[newName]){
+    showError('"'+newName+'" already exists in the chart. Each person must have a unique name.');return;
   }
 
-  // Update people array (source of truth)
-  var person=null;
-  for(var i=0;i<people.length;i++){if(people[i]._id===editingId){person=people[i];break;}}
-  if(person){
-    var oldName=person.name;
-    person.name=newName;person.role=newRole;person.location=newLocation;
-    person.email=newEmail;person.phone=newPhone;person.rel=newRel;
-    person.manager=newManagerName;
-    // Cascade name change to direct reports' manager strings
-    if(newName!==oldName){
-      people.forEach(function(p){if(p.manager===oldName)p.manager=newName;});
+  var newManagerName='';
+  if(placement==='reports'){
+    if(!mgrInput){showError('Please type a manager name, or choose Root node / Uncategorized.');return;}
+    var mgrNode=allNodesByName[mgrInput];
+    if(!mgrNode){showError('"'+mgrInput+'" doesn\'t match anyone in the chart. Pick a name from the list.');return;}
+    if(!isCreate&&mgrNode._id===editingId){showError('A person cannot report to themselves.');return;}
+    if(!isCreate&&wouldCreateCycle(editingId,mgrNode._id)){showError('Setting "'+mgrInput+'" as manager would create a circular reporting chain.');return;}
+    newManagerName=mgrNode.name;
+  } else if(placement==='uncat'){
+    newManagerName='VACANT'; // routes to Uncategorized node in buildTree
+  }
+  // 'root': newManagerName stays ''
+
+  if(isCreate){
+    // Mint a new stable ID beyond the current people array length
+    var newId=String(people.length+Date.now()%10000);
+    people.push({
+      _id:newId, name:newName, role:newRole, location:newLocation,
+      email:newEmail, phone:newPhone, rel:newRel, manager:newManagerName,
+    });
+  } else {
+    var person=null;
+    for(var i=0;i<people.length;i++){if(people[i]._id===editingId){person=people[i];break;}}
+    if(person){
+      var oldName=person.name;
+      person.name=newName;person.role=newRole;person.location=newLocation;
+      person.email=newEmail;person.phone=newPhone;person.rel=newRel;
+      person.manager=newManagerName;
+      if(newName!==oldName){
+        people.forEach(function(p){if(p.manager===oldName)p.manager=newName;});
+      }
     }
   }
 
-  // Rebuild tree
   var result=buildTree(people);
   allRoots=result.roots;allNodes=result.byId;allNodesByName=result.byName;
   if(allNodes['__uncategorized__']&&collapsed['__uncategorized__']===undefined)collapsed['__uncategorized__']=true;
 
   isDirty=true;updateDirtyBanner();
-  closeEditModal();render();showToast('Contact updated \u2713');
+  closeEditModal();render();
+  showToast(isCreate?'Person added \u2713':'Contact updated \u2713');
 }
 
+document.getElementById('add-person-btn').addEventListener('click',openAddModal);
 document.getElementById('edit-close').addEventListener('click',closeEditModal);
 document.getElementById('edit-cancel').addEventListener('click',closeEditModal);
 document.getElementById('edit-save').addEventListener('click',saveEdit);
