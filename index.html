@@ -1,13 +1,19 @@
 <!DOCTYPE html>
 <!--
   OrgChartCreator
-  Version: 5.1
+  Version: 5.2
   Repository: https://github.com/MotoDC/OrgChartCreator
   Live: https://motodc.github.io/OrgChartCreator/
   License: MIT
   Author: David Chad (MotoDC)
 
   Changelog:
+  v5.2 - Add direct report: hover tray gains a + button that opens the add modal
+         pre-filled with that person as manager; Delete: hover tray gains a trash
+         button that opens a two-state confirm modal -- simple confirm when no
+         direct reports, or a choice (Reassign to.../Uncategorized) when reports
+         exist; deleted person is removed from people array and their reports
+         reassigned accordingly before tree rebuild
   v5.1 - Add person: new "+ Add person" button in topbar opens the edit modal
          in create mode; placement control (Reports to / Root node / Uncategorized)
          replaces the plain manager text field in both add and edit modes, making
@@ -268,6 +274,7 @@ html, body { height: 100%; overflow: hidden; font-family: var(--font); backgroun
   color: var(--muted); transition: color 0.12s, background 0.12s, border-color 0.12s; padding: 0;
 }
 .action-btn:hover { color: var(--text); background: var(--surface3); border-color: var(--accent); }
+.action-btn.delete-btn:hover { color: var(--red); border-color: var(--red); background: rgba(247,111,111,0.08); }
 .action-btn svg { width: 11px; height: 11px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 
 /* Avatar + header */
@@ -656,6 +663,39 @@ html, body { height: 100%; overflow: hidden; font-family: var(--font); backgroun
   </div>
 </div>
 
+<!-- Delete Confirm Modal -->
+<div id="delete-modal" class="modal-overlay">
+  <div class="modal-card" style="width:380px">
+    <div class="modal-header">
+      <h3 id="delete-modal-title">Delete contact</h3>
+      <button class="modal-close" id="delete-close">&#10005;</button>
+    </div>
+    <div class="modal-body">
+      <p id="delete-simple-msg" style="font-size:13.5px;color:var(--muted);line-height:1.6;"></p>
+      <!-- shown only when the person has direct reports -->
+      <div id="delete-reassign-section" style="display:none">
+        <p id="delete-reports-msg" style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:10px;"></p>
+        <div class="modal-field">
+          <label>What should happen to their direct reports?</label>
+          <div class="placement-control">
+            <button type="button" class="placement-btn active" id="del-place-reassign">Reassign to&hellip;</button>
+            <button type="button" class="placement-btn uncat" id="del-place-uncat">Uncategorized</button>
+          </div>
+          <div id="del-manager-wrap" style="margin-top:8px">
+            <input type="text" id="del-reassign-mgr" list="del-manager-options" placeholder="Type a name&hellip;" autocomplete="off">
+            <datalist id="del-manager-options"></datalist>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-error" id="delete-error"></div>
+    <div class="modal-footer">
+      <button class="modal-btn secondary" id="delete-cancel">Cancel</button>
+      <button class="modal-btn" id="delete-confirm" style="background:var(--red);color:#fff;border-color:var(--red)">Delete</button>
+    </div>
+  </div>
+</div>
+
 <script>
 'use strict';
 
@@ -665,6 +705,8 @@ var ICON_EMAIL = '<svg viewBox="0 0 24 24"><rect x="2.25" y="4.5" width="19.5" h
 var ICON_PHONE = '<svg viewBox="0 0 24 24"><path d="M2.25 6.338c0-1.243.97-2.25 2.17-2.25h.702c.504 0 .948.32 1.108.8l1.25 3.75a1.2 1.2 0 01-.274 1.225l-1.163 1.163a13.502 13.502 0 006.712 6.712l1.163-1.163a1.2 1.2 0 011.225-.274l3.75 1.25c.48.16.8.604.8 1.108v.702c0 1.2-1.007 2.17-2.25 2.17C6.857 21.75 2.25 17.143 2.25 6.338z"/></svg>';
 var ICON_PENCIL= '<svg viewBox="0 0 24 24"><path d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125"/></svg>';
 var ICON_FOCUS = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>';
+var ICON_ADD   = '<svg viewBox="0 0 24 24"><path d="M12 4.5v15m7.5-7.5h-15"/></svg>';
+var ICON_TRASH = '<svg viewBox="0 0 24 24"><path d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"/></svg>';
 
 // Avatar palette
 var PALETTES = [
@@ -913,8 +955,10 @@ function render() {
     // Build HTML -- user values are sanitized by esc() before insertion
     var actionsHTML = node._synthetic ? '' :
       '<div class="node-actions">'+
-        '<button class="action-btn edit-btn" data-node-id="'+node._id+'" title="Edit contact">'+ICON_PENCIL+'</button>'+
-        '<button class="action-btn focus-btn" data-node-id="'+node._id+'" title="Focus on '+esc(node.name)+'">'+ICON_FOCUS+'</button>'+
+        '<button class="action-btn edit-btn"       data-node-id="'+node._id+'" title="Edit contact">'+ICON_PENCIL+'</button>'+
+        '<button class="action-btn add-report-btn" data-node-id="'+node._id+'" title="Add direct report">'+ICON_ADD+'</button>'+
+        '<button class="action-btn focus-btn"      data-node-id="'+node._id+'" title="Focus on '+esc(node.name)+'">'+ICON_FOCUS+'</button>'+
+        '<button class="action-btn delete-btn"     data-node-id="'+node._id+'" title="Delete '+esc(node.name)+'">'+ICON_TRASH+'</button>'+
       '</div>';
 
     var footerHTML = hasKids ?
@@ -960,10 +1004,22 @@ function render() {
       openEditModal(btn.dataset.nodeId);
     });
   });
+  canvas.querySelectorAll('.add-report-btn').forEach(function(btn) {
+    btn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      openAddDirectReport(btn.dataset.nodeId);
+    });
+  });
   canvas.querySelectorAll('.focus-btn').forEach(function(btn) {
     btn.addEventListener('click', function(e) {
       e.stopPropagation();
       setFocus(btn.dataset.nodeId);
+    });
+  });
+  canvas.querySelectorAll('.delete-btn').forEach(function(btn) {
+    btn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      openDeleteModal(btn.dataset.nodeId);
     });
   });
 }
@@ -1375,6 +1431,117 @@ function saveEdit(){
   closeEditModal();render();
   showToast(isCreate?'Person added \u2713':'Contact updated \u2713');
 }
+
+function openAddDirectReport(managerId){
+  var mgrNode=allNodes[managerId];
+  if(!mgrNode||mgrNode._synthetic)return;
+  openAddModal();
+  // Pre-select "Reports to" and fill the manager field
+  setPlacement('reports');
+  document.getElementById('edit-manager').value=mgrNode.name;
+}
+
+// ── Delete modal ──────────────────────────────────────────────────────────────
+var deletingId=null;
+
+function setDelPlacement(mode){
+  document.getElementById('del-place-reassign').classList.toggle('active', mode==='reassign');
+  document.getElementById('del-place-uncat').classList.toggle('active', mode==='uncat');
+  document.getElementById('del-manager-wrap').style.display = mode==='reassign' ? '' : 'none';
+}
+document.getElementById('del-place-reassign').addEventListener('click',function(){
+  setDelPlacement('reassign');
+  document.getElementById('del-reassign-mgr').focus();
+});
+document.getElementById('del-place-uncat').addEventListener('click',function(){setDelPlacement('uncat');});
+
+function openDeleteModal(id){
+  var node=allNodes[id];
+  if(!node||node._synthetic)return;
+  deletingId=id;
+
+  document.getElementById('delete-modal-title').textContent='Delete '+node.name;
+  var errEl=document.getElementById('delete-error');
+  errEl.textContent='';errEl.classList.remove('visible');
+
+  var directReports=node.children.filter(function(c){return !c._synthetic;});
+
+  if(directReports.length===0){
+    // Simple path — no reports affected
+    document.getElementById('delete-simple-msg').textContent=
+      'Are you sure you want to delete '+node.name+'? This cannot be undone.';
+    document.getElementById('delete-simple-msg').style.display='';
+    document.getElementById('delete-reassign-section').style.display='none';
+  } else {
+    // Rich path — need to handle orphans
+    document.getElementById('delete-simple-msg').style.display='none';
+    document.getElementById('delete-reassign-section').style.display='';
+    document.getElementById('delete-reports-msg').textContent=
+      'Deleting '+node.name+' will affect '+directReports.length+
+      ' direct report'+(directReports.length!==1?'s':'')+'. What should happen to them?';
+
+    // Populate reassign datalist: everyone except the person being deleted
+    var dl=document.getElementById('del-manager-options');
+    while(dl.firstChild)dl.removeChild(dl.firstChild);
+    Object.keys(allNodes).forEach(function(nid){
+      var n=allNodes[nid];
+      if(n._id!==id&&!n._synthetic){
+        var opt=document.createElement('option');opt.value=n.name;dl.appendChild(opt);
+      }
+    });
+    document.getElementById('del-reassign-mgr').value='';
+    setDelPlacement('reassign');
+  }
+
+  document.getElementById('delete-modal').classList.add('visible');
+}
+
+function closeDeleteModal(){
+  document.getElementById('delete-modal').classList.remove('visible');
+  deletingId=null;
+}
+
+function confirmDelete(){
+  if(!deletingId)return;
+  var node=allNodes[deletingId];if(!node)return;
+
+  var directReports=node.children.filter(function(c){return !c._synthetic;});
+  var errEl=document.getElementById('delete-error');
+  function showError(msg){errEl.textContent=msg;errEl.classList.add('visible');}
+
+  var newMgrName='VACANT'; // default: Uncategorized
+  if(directReports.length>0){
+    var delPlacement=document.getElementById('del-place-reassign').classList.contains('active')?'reassign':'uncat';
+    if(delPlacement==='reassign'){
+      var mgrInput=document.getElementById('del-reassign-mgr').value.trim();
+      if(!mgrInput){showError('Please choose a manager to reassign the direct reports to.');return;}
+      var mgrNode=allNodesByName[mgrInput];
+      if(!mgrNode){showError('"'+mgrInput+'" doesn\'t match anyone. Pick a name from the list.');return;}
+      if(mgrNode._id===deletingId){showError('Cannot reassign reports to the person being deleted.');return;}
+      newMgrName=mgrNode.name;
+    }
+    // Reassign direct reports in people array
+    people.forEach(function(p){
+      if(p.manager===node.name) p.manager=newMgrName;
+    });
+  }
+
+  // Remove the person from people array
+  people=people.filter(function(p){return p._id!==deletingId;});
+
+  // Rebuild tree
+  var result=buildTree(people);
+  allRoots=result.roots;allNodes=result.byId;allNodesByName=result.byName;
+  if(allNodes['__uncategorized__']&&collapsed['__uncategorized__']===undefined)collapsed['__uncategorized__']=true;
+
+  isDirty=true;updateDirtyBanner();
+  closeDeleteModal();render();showToast(node.name+' deleted');
+}
+
+document.getElementById('delete-close').addEventListener('click',closeDeleteModal);
+document.getElementById('delete-cancel').addEventListener('click',closeDeleteModal);
+document.getElementById('delete-confirm').addEventListener('click',confirmDelete);
+document.getElementById('delete-modal').addEventListener('click',function(e){if(e.target===document.getElementById('delete-modal'))closeDeleteModal();});
 
 document.getElementById('add-person-btn').addEventListener('click',openAddModal);
 document.getElementById('edit-close').addEventListener('click',closeEditModal);

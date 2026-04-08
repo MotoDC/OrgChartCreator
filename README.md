@@ -183,6 +183,7 @@ Some ideas for improvements:
 
 | Version | Changes |
 |---|---|
+| **v5.2** | Add direct report button on hover tray (opens add modal pre-filled with manager); Delete button on hover tray with two-state confirm — simple for leaf nodes, choice of Reassign/Uncategorized when the person has direct reports |
 | **v5.1** | Add person: new "+ Add person" button in topbar opens a create modal; placement control (Reports to / Root node / Uncategorized) replaces plain manager text field in both add and edit modes |
 | **v5.0** | In-chart editing: hover any node to reveal pencil (edit) and crosshair (focus) buttons; edit modal covers name, role, location, email, phone, manager (autocomplete with cycle/self-assignment/duplicate-name validation), and relationship health; right-click context menu replaced by hover tray; internal ID system so tree structure is ID-driven and renaming cascades safely; red dirty-state banner when unsaved edits exist; CSV download uses source filename + timestamp (e.g. `acme_2026-04-07_1430.csv`) |
 | **v3.7** | PNG export now captures current viewport at 2x — exports exactly what you see on screen, respecting zoom/pan/collapse state |
