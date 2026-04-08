@@ -1,13 +1,17 @@
 <!DOCTYPE html>
 <!--
   OrgChartCreator
-  Version: 5.2
+  Version: 5.3
   Repository: https://github.com/MotoDC/OrgChartCreator
   Live: https://motodc.github.io/OrgChartCreator/
   License: MIT
   Author: David Chad (MotoDC)
 
   Changelog:
+  v5.3 - Start fresh: upload screen split into 75% upload panel and 25% start-fresh
+         panel with OR divider; start-fresh uses an inline template CSV (works
+         offline/local) and opens directly into the chart with dirty banner active
+         so user is prompted to download their CSV; no fetch() dependency
   v5.2 - Add direct report: hover tray gains a + button that opens the add modal
          pre-filled with that person as manager; Delete: hover tray gains a trash
          button that opens a two-state confirm modal -- simple confirm when no
@@ -129,13 +133,14 @@ html, body { height: 100%; overflow: hidden; font-family: var(--font); backgroun
   position: fixed; inset: 0; display: flex; flex-direction: column;
   align-items: center; justify-content: center; z-index: 200;
   background: var(--bg); transition: opacity 0.3s, visibility 0.3s;
+  padding: 24px 16px;
 }
 #upload-screen.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
 
 .u-wordmark {
   font-family: var(--mono); font-size: 10px; font-weight: 500;
   letter-spacing: 0.28em; text-transform: uppercase;
-  color: var(--accent); margin-bottom: 32px;
+  color: var(--accent); margin-bottom: 28px;
   display: flex; align-items: center; gap: 10px;
 }
 .u-wordmark::before, .u-wordmark::after {
@@ -144,14 +149,67 @@ html, body { height: 100%; overflow: hidden; font-family: var(--font); backgroun
 }
 .u-wordmark::after { transform: scaleX(-1); }
 
-.upload-card {
+/* Two-panel row */
+.upload-panels {
+  display: flex; align-items: stretch; gap: 0;
+  width: 100%; max-width: 860px;
   background: var(--surface); border: 1px solid var(--border2);
-  border-radius: 20px; padding: 40px 44px;
-  max-width: 460px; width: calc(100% - 32px);
+  border-radius: 20px; overflow: hidden;
   box-shadow: 0 32px 64px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.03);
 }
-.upload-card h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.4px; margin-bottom: 8px; }
-.upload-card p { color: var(--muted); font-size: 13.5px; line-height: 1.65; margin-bottom: 24px; }
+
+.upload-card {
+  flex: 3; /* 75% */
+  padding: 36px 40px;
+  border-right: 1px solid var(--border);
+}
+.upload-card h1 { font-size: 20px; font-weight: 600; letter-spacing: -0.4px; margin-bottom: 8px; }
+.upload-card p { color: var(--muted); font-size: 13px; line-height: 1.65; margin-bottom: 20px; }
+
+/* OR divider */
+.upload-or {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 0 4px; gap: 8px; flex-shrink: 0; position: relative;
+}
+.upload-or::before {
+  content: ''; position: absolute; top: 20%; bottom: 20%; left: 50%;
+  width: 1px; background: var(--border);
+}
+.upload-or span {
+  font-size: 10px; color: var(--muted2); font-family: var(--mono);
+  letter-spacing: 0.1em; background: var(--surface);
+  padding: 4px 0; z-index: 1; user-select: none;
+}
+
+/* Start fresh panel (25%) */
+.fresh-card {
+  flex: 1;
+  padding: 36px 28px;
+  display: flex; flex-direction: column; justify-content: center; gap: 20px;
+}
+.fresh-card h2 { font-size: 14px; font-weight: 600; letter-spacing: -0.2px; }
+.fresh-card p { color: var(--muted); font-size: 12px; line-height: 1.6; }
+
+.fresh-preview {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 10px; padding: 11px 13px;
+  font-family: var(--mono); font-size: 9.5px; color: var(--muted);
+  line-height: 1.85; overflow: hidden;
+}
+.fresh-preview .fp-header { color: var(--accent2); font-weight: 500; margin-bottom: 3px; }
+.fresh-preview .fp-root  { color: var(--green); }
+.fresh-preview .fp-child { color: var(--muted); padding-left: 8px; }
+
+.btn-fresh {
+  background: var(--surface2); color: var(--text);
+  border: 1px solid var(--border2); border-radius: 9px;
+  padding: 11px 0; font-size: 13px; font-weight: 500;
+  cursor: pointer; width: 100%; font-family: var(--font);
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  display: flex; align-items: center; justify-content: center; gap: 7px;
+}
+.btn-fresh:hover { background: var(--surface3); border-color: var(--accent); color: var(--accent); }
+.btn-fresh svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
 .drop-zone {
   border: 1.5px dashed var(--border2); border-radius: var(--radius);
@@ -498,39 +556,61 @@ html, body { height: 100%; overflow: hidden; font-family: var(--font); backgroun
 <!-- Upload Screen -->
 <div id="upload-screen">
   <div class="u-wordmark">OrgChartCreator</div>
-  <div class="upload-card">
-    <h1>Map your customer's organization</h1>
-    <p>Upload a CSV file containing your customer's org structure to generate an interactive, collapsible org chart. Expand and collapse branches to focus on specific teams, then export to PNG for use in business reviews and presentations.</p>
-    <div style="display:flex;align-items:center;gap:10px;background:rgba(46,204,142,0.08);border:1px solid rgba(46,204,142,0.25);border-radius:9px;padding:10px 14px;margin-bottom:16px;">
-      <svg viewBox="0 0 24 24" width="16" height="16" style="stroke:#2ecc8e;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-      <span style="font-size:12.5px;color:#2ecc8e;font-weight:500;">Your data never leaves your computer — all processing happens locally in your browser.</span>
-    </div>
-    <div class="drop-zone" id="drop-zone">
-      <input type="file" accept=".csv,.txt" id="file-input">
-      <div class="drop-icon">
-        <svg viewBox="0 0 24 24"><path d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg>
+  <div class="upload-panels">
+
+    <!-- Left panel: upload CSV (75%) -->
+    <div class="upload-card">
+      <h1>Map your customer's organization</h1>
+      <p>Upload a CSV with your org structure to generate an interactive, collapsible chart. Export to PNG for business reviews and presentations.</p>
+      <div style="display:flex;align-items:center;gap:10px;background:rgba(46,204,142,0.08);border:1px solid rgba(46,204,142,0.25);border-radius:9px;padding:10px 14px;margin-bottom:16px;">
+        <svg viewBox="0 0 24 24" width="16" height="16" style="stroke:#2ecc8e;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        <span style="font-size:12px;color:#2ecc8e;font-weight:500;">Your data never leaves your computer — all processing happens locally in your browser.</span>
       </div>
-      <span class="dz-title"><strong>Click to upload</strong> or drag &amp; drop</span>
-      <span class="dz-sub">CSV or TXT · all columns optional except name &amp; manager</span>
-    </div>
-    <div style="text-align:center;margin-bottom:12px;">
-      <a href="orgchart_template.csv" download style="font-size:12.5px;color:var(--accent);text-decoration:none;display:inline-flex;align-items:center;gap:5px;font-family:var(--font);">
-        <svg viewBox="0 0 24 24" width="13" height="13" style="stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><path d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/></svg>
-        Download CSV template
-      </a>
-    </div>
-    <div class="csv-hint">
-      <span class="hint-label">COLUMN REFERENCE</span>
-      <span><span class="col-required">name</span>, <span class="col-required">manager</span>, <span class="col-optional">role, location, email, phone, relationship</span></span>
-      <div class="csv-example">
-        name,manager,role,location,email,relationship<br>
-        Jane Smith,,CTO,Toronto ON,jane@co.com,green<br>
-        John Doe,Jane Smith,VP Eng,Toronto ON,john@co.com,yellow
+      <div class="drop-zone" id="drop-zone">
+        <input type="file" accept=".csv,.txt" id="file-input">
+        <div class="drop-icon">
+          <svg viewBox="0 0 24 24"><path d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg>
+        </div>
+        <span class="dz-title"><strong>Click to upload</strong> or drag &amp; drop</span>
+        <span class="dz-sub">CSV or TXT &middot; all columns optional except name &amp; manager</span>
       </div>
+      <div class="csv-hint">
+        <span class="hint-label">COLUMN REFERENCE</span>
+        <span><span class="col-required">name</span>, <span class="col-required">manager</span>, <span class="col-optional">role, location, email, phone, relationship</span></span>
+        <div class="csv-example">
+          name,manager,role,location,email,relationship<br>
+          Jane Smith,,CTO,Toronto ON,jane@co.com,green<br>
+          John Doe,Jane Smith,VP Eng,Toronto ON,john@co.com,yellow
+        </div>
+      </div>
+      <div id="file-status"></div>
+      <div id="upload-error"></div>
+      <button class="btn-upload" id="render-btn" disabled>Generate Org Chart &rarr;</button>
     </div>
-    <div id="file-status"></div>
-    <div id="upload-error"></div>
-    <button class="btn-upload" id="render-btn" disabled>Generate Org Chart &rarr;</button>
+
+    <!-- OR divider -->
+    <div class="upload-or"><span>OR</span></div>
+
+    <!-- Right panel: start fresh (25%) -->
+    <div class="fresh-card">
+      <div>
+        <h2>Start from scratch</h2>
+        <p style="margin-top:6px;">No CSV? Build your org chart directly in the tool using the sample structure below as a starting point.</p>
+      </div>
+      <div class="fresh-preview">
+        <div class="fp-header">SAMPLE STRUCTURE</div>
+        <div class="fp-root">&#x25CF; Jane Smith &mdash; CTO</div>
+        <div class="fp-child">&#x25CB; John Doe &mdash; VP Engineering</div>
+        <div class="fp-child">&#x25CB; Sarah Lee &mdash; VP Operations</div>
+        <div class="fp-child" style="padding-left:16px;font-size:9px;color:var(--muted2)">+ add, edit or delete any node</div>
+      </div>
+      <button class="btn-fresh" id="fresh-btn">
+        <svg viewBox="0 0 24 24"><path d="M12 4.5v15m7.5-7.5h-15"/></svg>
+        Start fresh
+      </button>
+      <p style="font-size:10.5px;color:var(--muted2);text-align:center;line-height:1.5;">You can download your finished chart as a CSV at any time.</p>
+    </div>
+
   </div>
 </div>
 
@@ -886,6 +966,16 @@ function layoutTree(roots, collapsed) {
   roots.forEach(function(r){measure(r);place(r,0,cursor);cursor+=r.sw+HGAP*3;});
 }
 
+// Inline template — used by "Start fresh" so the tool works offline/local
+var TEMPLATE_CSV = [
+  'name,manager,role,location,email,phone,relationship',
+  'Jane Smith,,Chief Technology Officer,Toronto ON,jane.smith@company.com,,green',
+  'John Doe,Jane Smith,VP Engineering,Toronto ON,john.doe@company.com,,green',
+  'Sarah Lee,Jane Smith,VP Operations,Vancouver BC,sarah.lee@company.com,,yellow',
+  'Mike Chen,John Doe,Director Software Dev,Toronto ON,mike.chen@company.com,,red',
+  'Priya Patel,John Doe,Director QA,Toronto ON,priya.patel@company.com,,',
+].join('\n');
+
 // App state
 var people = [], allNodes = {}, allNodesByName = {}, allRoots = [];
 var collapsed = {}, focusNode = null;
@@ -1223,6 +1313,22 @@ renderBtn.addEventListener('click',function(){
   allRoots=result.roots;allNodes=result.byId;allNodesByName=result.byName;
   focusNode=null;collapsed={};isDirty=false;updateDirtyBanner();
   if(allNodes['__uncategorized__'])collapsed['__uncategorized__']=true;
+  document.getElementById('upload-screen').classList.add('hidden');
+  document.getElementById('focus-banner').classList.remove('visible');
+  render();setTimeout(fitAll,60);
+});
+
+document.getElementById('fresh-btn').addEventListener('click',function(){
+  var data=parseCSV(TEMPLATE_CSV);
+  if(!data)return;
+  people=data;
+  sourceFileName='orgchart';
+  var result=buildTree(people);
+  allRoots=result.roots;allNodes=result.byId;allNodesByName=result.byName;
+  focusNode=null;collapsed={};
+  // Mark dirty immediately — there's no source file, so user must download to save
+  isDirty=true;
+  updateDirtyBanner();
   document.getElementById('upload-screen').classList.add('hidden');
   document.getElementById('focus-banner').classList.remove('visible');
   render();setTimeout(fitAll,60);
